@@ -1,0 +1,9 @@
+{
+  "mcpServers": {
+    "thealgorithms-contrib-mcp": {
+      "command": "python3",
+      "args": ["mcp_server.py"],
+      "description": "CS 440 Lab 6 MCP Server exposing TheAlgorithms/Python CONTRIBUTING.md audit tools, issue resources, and safe fork PR prompts over stdio."
+    }
+  }
+}
