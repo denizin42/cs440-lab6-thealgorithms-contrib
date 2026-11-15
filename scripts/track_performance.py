@@ -30,6 +30,21 @@ import sys
 import time
 from typing import Any, Dict, List, Optional
 
+try:
+    from scripts.report_evidence import (
+        collect_solution_evidence,
+        collect_subagent_metrics,
+        iter_recent_subagent_transcripts,
+        render_subagent_section,
+    )
+except ImportError:
+    from report_evidence import (  # type: ignore[import-not-found,no-redef]
+        collect_solution_evidence,
+        collect_subagent_metrics,
+        iter_recent_subagent_transcripts,
+        render_subagent_section,
+    )
+
 REPO_ROOT = Path(__file__).resolve().parent.parent
 DEFAULT_DB_FILE = REPO_ROOT / "logs" / "harness_performance.db"
 DEFAULT_REPORT_FILE = REPO_ROOT / "PERFORMANCE_REPORT.md"
@@ -63,7 +78,8 @@ CREATE TABLE IF NOT EXISTS agent_runs (
     total_tokens INTEGER NOT NULL DEFAULT 0,
     subagents_used TEXT NOT NULL DEFAULT 'unknown',
     changelog_entry TEXT NOT NULL DEFAULT '',
-    fork_overhead_sec REAL NOT NULL DEFAULT 0.0
+    fork_overhead_sec REAL NOT NULL DEFAULT 0.0,
+    subagent_breakdown_json TEXT NOT NULL DEFAULT '{}'
 );
 """
 
@@ -74,6 +90,7 @@ MIGRATION_COLUMNS = (
     ("subagents_used", "TEXT NOT NULL DEFAULT 'unknown'"),
     ("changelog_entry", "TEXT NOT NULL DEFAULT ''"),
     ("fork_overhead_sec", "REAL NOT NULL DEFAULT 0.0"),
+    ("subagent_breakdown_json", "TEXT NOT NULL DEFAULT '{}'"),
 )
 
 
@@ -160,7 +177,8 @@ def measure_harness_features() -> Dict[str, Any]:
                 "not TestPart7PerformanceTracker and "
                 "not TestPart9MakefileCleanupAndTelemetry and "
                 "not TestPart10AgentAgnosticSupport and "
-                "not TestPart11McpFastAuditAndScopedSubagents"
+                "not TestPart11McpFastAuditAndScopedSubagents and "
+                "not TestPart12PerfReportProofAndSubagentBreakdown"
             ),
             "-v",
             "--tb=no",
@@ -358,21 +376,11 @@ def _poll_subagent_transcripts(
 ) -> None:
     """Stream new tool calls from active sub-agent transcripts in real time."""
     elapsed = (time.perf_counter_ns() - start_ns) / 1_000_000_000.0
-    for base in (
-        Path.home() / ".gemini-personal" / ".gemini" / "antigravity-cli" / "brain",
-        Path.home() / ".gemini" / "antigravity-cli" / "brain",
-    ):
-        if not base.exists():
-            continue
-        for tpath in base.glob("*/.system_generated/logs/transcript.jsonl"):
-            conv_id = tpath.parent.parent.parent.name
-            if conv_id == main_conv_id or tpath.stat().st_mtime < start_epoch:
-                continue
-            lines = tpath.read_text(encoding="utf-8", errors="ignore").splitlines()
-            prev = seen_lines.get(conv_id, 0)
-            for raw in lines[prev:]:
-                _print_subagent_step(raw, conv_id[:8], elapsed)
-            seen_lines[conv_id] = len(lines)
+    for conv_id, lines in iter_recent_subagent_transcripts(start_epoch, main_conv_id):
+        prev = seen_lines.get(conv_id, 0)
+        for raw in lines[prev:]:
+            _print_subagent_step(raw, conv_id[:8], elapsed)
+        seen_lines[conv_id] = len(lines)
 
 
 def _print_subagent_step(raw_json: str, short_id: str, elapsed: float) -> None:
@@ -546,6 +554,7 @@ def run_timed_agent_command(agent_cmd: str) -> Dict[str, Any]:
     telemetry["subagents_used"] = _detect_subagents(
         "\n".join(chunks), str(telemetry.get("conversation_id", ""))
     )
+    telemetry["subagent_breakdown"] = collect_subagent_metrics(start_epoch, telemetry)
     return telemetry
 
 
@@ -569,8 +578,10 @@ def record_run(
             curated_context_tokens, ast_compliant, doctests_attempted,
             overflow_171_resolved, algo_exec_ms, feature_breakdown_json, notes,
             input_tokens, output_tokens, total_tokens, subagents_used, changelog_entry,
-            fork_overhead_sec
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            fork_overhead_sec, subagent_breakdown_json
+        ) VALUES (
+            ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+        )
         """,
         (
             snapshot["version_tag"],
@@ -600,6 +611,7 @@ def record_run(
             snapshot["subagents_used"],
             snapshot["changelog_entry"],
             snapshot["fork_overhead_sec"],
+            json.dumps(snapshot.get("subagent_breakdown", {})),
         ),
     )
     conn.commit()
@@ -679,7 +691,7 @@ def render_markdown_report(runs: List[Dict[str, Any]], db_path: Path) -> str:
     chart = _build_chart_series(runs)
     base_eff = _effective_duration(baseline)
     lat_eff = _effective_duration(latest)
-    history_table = "\n".join(_format_history_row(r, base_eff) for r in runs)
+    ev = collect_solution_evidence()
 
     return f"""# CS 440 Lab 6 — Agent Algorithm-Fix Performance Report
 
@@ -716,7 +728,48 @@ xychart-beta
 
 | Run | Version | Change / Tuning | Duration | Delta vs. `{baseline["version_tag"]}` | Tokens | Sub-Agents | Verification |
 | :---: | :--- | :--- | :---: | :---: | :---: | :--- | :--- |
-{history_table}
+{chr(10).join(_format_history_row(r, base_eff) for r in runs)}
+
+---
+
+## 4. Main Agent vs. Sub-Agent Breakdown (`{latest["version_tag"]}`)
+
+| Agent Role | Duration | Tokens | Responsibility |
+| :--- | :---: | :---: | :--- |
+{render_subagent_section(latest)}
+
+---
+
+## 5. Phase 2 Deliverables, Issue `#15656` Fix & Passing Test Evidence
+
+- **Modified Algorithm Target**: `maths/binomial_distribution.py` (fixed `float(factorial(trials))` `OverflowError` for `trials >= 171` using `math.comb` + log-space `lgamma`/`log`/`log1p`/`exp` fallback).
+- **Generated Workflow Deliverables**: {ev["created_files"]}
+
+### Issue `#15656` Fix Implementation (`maths/binomial_distribution.py`)
+
+```python
+{ev["snippet"]}
+```
+
+### Live Passing Test & Compliance Proof
+
+**1. `python3 -m doctest -v maths/binomial_distribution.py`:**
+
+```text
+{ev["doctest_out"]}
+```
+
+**2. `fast_audit.py maths/binomial_distribution.py` (`CONTRIBUTING.md`, `ruff`, `mypy`, `pylint`):**
+
+```json
+{ev["audit_out"]}
+```
+
+**3. `pytest tests/test_src_workflow.py -q --tb=short` (Phase 2 `src/` Workflow Tests):**
+
+```text
+{ev["src_test_out"]}
+```
 """
 
 
@@ -768,6 +821,7 @@ def _build_snapshot(
         "subagents_used": str(telemetry.get("subagents_used", "unknown")),
         "changelog_entry": args.change or _latest_changelog_entry() or args.label,
         "fork_overhead_sec": round(float(args.fork_overhead_sec), 4),
+        "subagent_breakdown": telemetry.get("subagent_breakdown", {}),
     }
 
 

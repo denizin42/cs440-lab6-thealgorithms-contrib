@@ -1,0 +1,182 @@
+"""Sub-agent transcript metrics and live Issue #15656 solution evidence helpers."""
+
+from __future__ import annotations
+
+from datetime import datetime
+import json
+from pathlib import Path
+import subprocess
+import sys
+from typing import Any, Dict, List, Tuple
+
+REPO_ROOT = Path(__file__).resolve().parent.parent
+
+
+def _parse_step_ts(raw_json: str) -> float:
+    """Extract ISO-8601 `created_at` epoch seconds from a transcript line."""
+    try:
+        ts = json.loads(raw_json).get("created_at", "")
+        return datetime.fromisoformat(ts.replace("Z", "+00:00")).timestamp() if ts else 0.0
+    except (json.JSONDecodeError, ValueError):
+        return 0.0
+
+
+def _parse_step_tokens(raw_json: str) -> int:
+    """Extract token total if present on a transcript step."""
+    try:
+        data = json.loads(raw_json)
+        usage = data.get("usage") or {}
+        if usage.get("total_tokens"):
+            return int(usage["total_tokens"])
+        return int(data.get("input_tokens") or 0) + int(data.get("output_tokens") or 0)
+    except (json.JSONDecodeError, TypeError, ValueError):
+        return 0
+
+
+def _detect_subagent_role(lines: List[str]) -> str:
+    """Infer subagent role name from initial transcript lines."""
+    head = "\n".join(lines[:5])
+    for name in ("issue-researcher", "contributing-reviewer"):
+        if name in head:
+            return name
+    if "fast_audit" in head or "CONTRIBUTING" in head:
+        return "contributing-reviewer"
+    if "15656" in head or "binomial_distribution" in head:
+        return "issue-researcher"
+    return "subagent"
+
+
+def iter_recent_subagent_transcripts(
+    start_epoch: float, main_conv_id: str
+) -> List[Tuple[str, List[str]]]:
+    """Return `(conv_id, lines)` for sub-agent transcripts modified since `start_epoch`."""
+    results: List[Tuple[str, List[str]]] = []
+    for base in (
+        Path.home() / ".gemini-personal" / ".gemini" / "antigravity-cli" / "brain",
+        Path.home() / ".gemini" / "antigravity-cli" / "brain",
+    ):
+        if not base.exists():
+            continue
+        for tpath in base.glob("*/.system_generated/logs/transcript.jsonl"):
+            conv_id = tpath.parent.parent.parent.name
+            if conv_id == main_conv_id or tpath.stat().st_mtime < start_epoch:
+                continue
+            lines = tpath.read_text(encoding="utf-8", errors="ignore").splitlines()
+            if lines:
+                results.append((conv_id, lines))
+    return results
+
+
+def collect_subagent_metrics(start_epoch: float, telemetry: Dict[str, Any]) -> Dict[str, Any]:
+    """Summarize main orchestrator and per-subagent duration & tokens from transcripts."""
+    main_conv_id = str(telemetry.get("conversation_id", ""))
+    total_dur = float(telemetry.get("duration_sec", 0.0))
+    sub_list: List[Dict[str, Any]] = []
+    for conv_id, lines in iter_recent_subagent_transcripts(start_epoch, main_conv_id):
+        first_ts, last_ts = _parse_step_ts(lines[0]), _parse_step_ts(lines[-1])
+        if not first_ts or first_ts < start_epoch - 5.0:
+            continue
+        dur = round(max(0.0, last_ts - first_ts), 2) if last_ts else 0.0
+        tok = sum(_parse_step_tokens(raw) for raw in lines)
+        sub_list.append(
+            {
+                "name": _detect_subagent_role(lines),
+                "id": conv_id[:8],
+                "duration_sec": dur,
+                "tokens": tok,
+            }
+        )
+
+    subagents_str = str(telemetry.get("subagents_used", ""))
+    if not sub_list and subagents_str not in ("none detected", "unknown", ""):
+        for name in [s.strip() for s in subagents_str.split(",") if s.strip()]:
+            sub_list.append({"name": name, "id": "inline", "duration_sec": 0.0, "tokens": 0})
+    return {
+        "main_agent": {
+            "duration_sec": round(total_dur, 2),
+            "total_duration_sec": round(total_dur, 2),
+            "tokens": int(telemetry.get("total_tokens", 0)),
+        },
+        "subagents": sub_list,
+    }
+
+
+def collect_solution_evidence() -> Dict[str, str]:
+    """Collect Issue #15656 code snippet, generated files, and live passing test proof."""
+    algo_path = REPO_ROOT / "maths" / "binomial_distribution.py"
+    lines = algo_path.read_text(encoding="utf-8").splitlines()
+    start_idx = next(
+        (i for i, ln in enumerate(lines) if ln.startswith("def binomial_distribution(")), 0
+    )
+    impl_lines = [ln for ln in lines[start_idx:] if not ln.strip().startswith(">>>")]
+    snippet = "\n".join(impl_lines[:45]).strip()
+
+    doctest_proc = subprocess.run(
+        [sys.executable, "-m", "doctest", "-v", "maths/binomial_distribution.py"],
+        cwd=str(REPO_ROOT),
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    audit_script = REPO_ROOT.joinpath(
+        ".claude", "skills", "denizin42-contributing", "scripts", "fast_audit.py"
+    )
+    audit_proc = subprocess.run(
+        [sys.executable, str(audit_script), "maths/binomial_distribution.py"],
+        cwd=str(REPO_ROOT),
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    src_test_proc = subprocess.run(
+        [sys.executable, "-m", "pytest", "tests/test_src_workflow.py", "-q", "--tb=short"],
+        cwd=str(REPO_ROOT),
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    created = [
+        p.relative_to(REPO_ROOT).as_posix()
+        for p in sorted((REPO_ROOT / "src").glob("*.py"))
+        if p.name != "__pycache__"
+    ]
+    for extra in ("tests/test_src_workflow.py", "CONTRIBUTION_REPORT.md"):
+        if (REPO_ROOT / extra).exists():
+            created.append(extra)
+    return {
+        "snippet": snippet,
+        "doctest_out": "\n".join(doctest_proc.stdout.strip().splitlines()[-12:]),
+        "audit_out": audit_proc.stdout.strip(),
+        "src_test_out": src_test_proc.stdout.strip(),
+        "created_files": ", ".join(f"`{f}`" for f in created),
+    }
+
+
+def render_subagent_section(latest: Dict[str, Any]) -> str:
+    """Render Section 4: Main Agent vs. Sub-Agent Breakdown."""
+    raw = latest.get("subagent_breakdown_json") or "{}"
+    try:
+        bd = json.loads(raw) if isinstance(raw, str) else dict(raw)
+    except (json.JSONDecodeError, TypeError):
+        bd = {}
+    main_info = bd.get("main_agent") or {
+        "duration_sec": latest["agent_duration_sec"],
+        "tokens": latest.get("total_tokens", 0),
+    }
+    tok_m = int(main_info.get("tokens", latest.get("total_tokens", 0)) or 0)
+    tok_m_str = f"`{tok_m:,}`" if tok_m > 0 else "`n/a`"
+    rows = [
+        f"| **Main Orchestrator** (`{latest['version_tag']}`) | "
+        f"`{float(main_info.get('duration_sec', 0.0)):.2f} s` | {tok_m_str} | "
+        "Coordinates fork, sub-agents, PR & final verification |"
+    ]
+    for sub in bd.get("subagents") or []:
+        dur_val = sub.get("duration_sec")
+        dur_s = f"`{float(dur_val):.2f} s`" if dur_val else "`n/a`"
+        tok_s = int(sub.get("tokens", 0) or 0)
+        tok_s_str = f"`{tok_s:,}`" if tok_s > 0 else "`n/a`"
+        rows.append(
+            f"| Sub-Agent: `{sub.get('name', 'subagent')}` (`{sub.get('id', 'n/a')}`) | "
+            f"{dur_s} | {tok_s_str} | Isolated context research / `CONTRIBUTING.md` audit |"
+        )
+    return "\n".join(rows)
