@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Strip Phase 1 `# HINTS:` blocks from `.claude/agents/*.md` and `SKILL.md`, route sub-agents to `flash`/`haiku` in parallel, pass `--effort medium` in `Makefile`, and record `v5` (`130.619s`, `38,084` tokens, `-48.5%` tokens vs `v4`) in `PERFORMANCE_REPORT.md`
 - Upgrade console streaming output in `scripts/track_performance.py` and `scripts/cleanup-fork.sh` with step emojis, tool/parameter summaries, and real-time sub-agent transcript tailing
 - Normalize `PERFORMANCE_REPORT.md` durations by adding `+4.5s` cold-fork overhead (`--fork-overhead-sec`) to runs that skipped initial repo forking (`v1`, `v3`)
 - Deduplicate target config across `context/*.md` and `SKILL.md`, align `branch_name` in `mcp_server.py` with `CLAUDE.md`, fix `denizin42-contributing` skill references, and standardize comma-separated Claude tool names in agent/skill frontmatter
