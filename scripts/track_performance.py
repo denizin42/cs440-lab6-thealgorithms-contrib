@@ -36,6 +36,7 @@ try:
         collect_subagent_metrics,
         iter_recent_subagent_transcripts,
         render_subagent_section,
+        reset_target_to_buggy,
     )
 except ImportError:
     from report_evidence import (  # type: ignore[import-not-found,no-redef]
@@ -43,6 +44,7 @@ except ImportError:
         collect_subagent_metrics,
         iter_recent_subagent_transcripts,
         render_subagent_section,
+        reset_target_to_buggy,
     )
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
@@ -864,6 +866,11 @@ def main() -> int:
     parser.add_argument(
         "--report-file", default=str(DEFAULT_REPORT_FILE), help="Markdown report path"
     )
+    parser.add_argument(
+        "--no-reset-target",
+        action="store_true",
+        help="Skip resetting maths/binomial_distribution.py to buggy state before --agent-cmd",
+    )
     parser.add_argument("--json", action="store_true", help="Print JSON snapshot to stdout")
     args = parser.parse_args()
 
@@ -881,6 +888,12 @@ def main() -> int:
         "subagents_used": "unknown",
     }
     if args.agent_cmd:
+        if not args.no_reset_target:
+            reset_target_to_buggy()
+            _log(
+                "      🔄 Reset maths/binomial_distribution.py to buggy Issue #15656 baseline "
+                "(OverflowError at trials >= 171)."
+            )
         _log("      🤖 Running agent & streaming live main + sub-agent steps:")
         telemetry = run_timed_agent_command(args.agent_cmd)
         _log(

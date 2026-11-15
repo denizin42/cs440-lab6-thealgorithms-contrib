@@ -1,15 +1,15 @@
 # CS 440 Lab 6 — Agent Algorithm-Fix Performance Report
 
-SQLite Database: `harness_performance.db` | Total Runs: **7** | Baseline: **`v1`** (v1 Agent Fix Run)
+SQLite Database: `harness_performance.db` | Total Runs: **8** | Baseline: **`v1`** (v1 Agent Fix Run)
 
 ---
 
-## 1. Baseline (`v1`) vs. Latest (`v7`) Algorithm-Fix Speed
+## 1. Baseline (`v1`) vs. Latest (`v8`) Algorithm-Fix Speed
 
-| Metric | Baseline (`v1`) | Latest (`v7`) | Delta / Status |
+| Metric | Baseline (`v1`) | Latest (`v8`) | Delta / Status |
 | :--- | :---: | :---: | :---: |
-| **Normalized Duration (incl. Cold Fork)** | `245.475 s` | `129.762 s` | `-115.7121 s (-47.1%)` |
-| **Total Agent Tokens** | `n/a` | `44,668` | `in=41,476, out=3,192` |
+| **Normalized Duration (incl. Cold Fork)** | `245.475 s` | `98.587 s` | `-146.8881 s (-59.8%)` |
+| **Total Agent Tokens** | `n/a` | `51,727` | `in=45,410, out=6,317` |
 | **Sub-Agents Invoked** | `unknown` | `issue-researcher, contributing-reviewer` | `issue-researcher` & `contributing-reviewer` |
 | **Issue #15656 (`n=171`) Fix** | `RESOLVED` | `RESOLVED` | `maths/binomial_distribution.py` |
 | **AST `CONTRIBUTING.md` Compliance** | `PASS` | `PASS` | `7` doctests |
@@ -21,10 +21,10 @@ SQLite Database: `harness_performance.db` | Total Runs: **7** | Baseline: **`v1`
 ```mermaid
 xychart-beta
     title "Agent Fix Duration (s) Across Harness Versions"
-    x-axis ["v1", "v2", "v3", "v4", "v5", "v6", "v7"]
+    x-axis ["v1", "v2", "v3", "v4", "v5", "v6", "v7", "v8"]
     y-axis "Agent Fix Duration (s)" 0 --> 306.84
-    bar [245.475, 45.724, 194.199, 208.213, 130.619, 109.192, 129.762]
-    line [245.475, 45.724, 194.199, 208.213, 130.619, 109.192, 129.762]
+    bar [245.475, 45.724, 194.199, 208.213, 130.619, 109.192, 129.762, 98.587]
+    line [245.475, 45.724, 194.199, 208.213, 130.619, 109.192, 129.762, 98.587]
 ```
 
 ---
@@ -40,16 +40,17 @@ xychart-beta
 | 5 | `v5` | Stripped Phase 1 hints, routed subagents to flash in parallel, set --effort medium, and avoided redundant context re-reads | `130.619s` (`+4.5s` fork) | `-114.8559 s (-46.8%)` | `38,084` | `issue-researcher, contributing-reviewer` | RESOLVED (7 doctests) |
 | 6 | `v6` | Added fast_audit.py skill script, get_issue_root_cause_context & run_fast_compliance_audit MCP tools, and scoped subagents strictly to local repo | `109.192s` (`+4.5s` fork) | `-136.2823 s (-55.5%)` | `41,929` | `issue-researcher, contributing-reviewer` | RESOLVED (7 doctests) |
 | 7 | `v7` | Added Main vs Sub-Agent duration/token breakdown and Issue #15656 code snippet + live test proof to PERFORMANCE_REPORT.md | `129.762s` (`+4.5s` fork) | `-115.7121 s (-47.1%)` | `44,668` | `issue-researcher, contributing-reviewer` | RESOLVED (7 doctests) |
+| 8 | `v8` | Reset maths/binomial_distribution.py to buggy Issue #15656 before timed agent run and invoke MCP tools | `98.587s` (`+4.5s` fork) | `-146.8881 s (-59.8%)` | `51,727` | `issue-researcher, contributing-reviewer` | RESOLVED (7 doctests) |
 
 ---
 
-## 4. Main Agent vs. Sub-Agent Breakdown (`v7`)
+## 4. Main Agent vs. Sub-Agent Breakdown (`v8`)
 
 | Agent Role | Duration | Tokens | Responsibility |
 | :--- | :---: | :---: | :--- |
-| **Main Orchestrator** (`v7`) | `125.26 s` | `44,668` | Coordinates fork, sub-agents, PR & final verification |
-| Sub-Agent: `contributing-reviewer` (`2eb5608c`) | `39.00 s` | `26,583` | Isolated context research / `CONTRIBUTING.md` audit |
-| Sub-Agent: `issue-researcher` (`fbd44a9e`) | `25.00 s` | `23,548` | Isolated context research / `CONTRIBUTING.md` audit |
+| **Main Orchestrator** (`v8`) | `94.09 s` | `51,727` | Coordinates fork, sub-agents, PR & final verification |
+| Sub-Agent: `issue-researcher` (`ed30e688`) | `24.00 s` | `16,545` | Isolated context research / `CONTRIBUTING.md` audit |
+| Sub-Agent: `contributing-reviewer` (`51935e43`) | `68.00 s` | `33,097` | Isolated context research / `CONTRIBUTING.md` audit |
 
 ---
 
@@ -64,15 +65,14 @@ xychart-beta
 def binomial_distribution(successes: int, trials: int, prob: float) -> float:
     """
     Return probability of k successes out of n tries, with p probability for one
-    success.
+    success
 
-    Uses ``math.comb`` to avoid intermediate factorial float overflow, and falls
-    back to log-space (``lgamma`` and ``log``) when large ``trials`` would
-    overflow ``float`` or underflow intermediate powers.
+    The function uses ``math.comb`` (with a log-space fallback via ``lgamma`` for
+    very large trials) to avoid float overflow when ``trials >= 171``.
 
     0.30870000000000003
     0.375
-    0.060749764626165485
+    0.060749764626
     0.017839011146
     Traceback (most recent call last):
         ...
@@ -84,26 +84,27 @@ def binomial_distribution(successes: int, trials: int, prob: float) -> float:
         ...
     ValueError: prob has to be in range of 1 - 0
     """
+    if not isinstance(successes, int) or not isinstance(trials, int):
+        raise TypeError("the function is defined for non-negative integers")
     if successes > trials:
         raise ValueError("successes must be lower or equal to trials")
     if trials < 0 or successes < 0:
         raise ValueError("the function is defined for non-negative integers")
-    if not isinstance(successes, int) or not isinstance(trials, int):
-        raise TypeError("the function is defined for non-negative integers")
     if not 0 < prob < 1:
         raise ValueError("prob has to be in range of 1 - 0")
     probability = (prob**successes) * ((1 - prob) ** (trials - successes))
-    if probability != 0.0:
+    if probability > 0.0:
         try:
             return probability * comb(trials, successes)
         except OverflowError:
             pass
-    # Fall back to log-space when intermediate powers underflow or comb overflows float.
-    log_coefficient = (
-        lgamma(trials + 1) - lgamma(successes + 1) - lgamma(trials - successes + 1)
+    return exp(
+        lgamma(trials + 1)
+        - lgamma(successes + 1)
+        - lgamma(trials - successes + 1)
+        + successes * log(prob)
+        + (trials - successes) * log1p(-prob)
     )
-    log_probability = successes * log(prob) + (trials - successes) * log1p(-prob)
-    return exp(log_coefficient + log_probability)
 ```
 
 ### Live Passing Test & Compliance Proof
@@ -143,5 +144,5 @@ Test passed.
 
 ```text
 .....                                                                    [100%]
-5 passed in 0.02s
+5 passed in 0.01s
 ```
