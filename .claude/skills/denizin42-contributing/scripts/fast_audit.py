@@ -10,16 +10,18 @@ import json
 from pathlib import Path
 import subprocess
 import sys
-from typing import Any, Dict
+from typing import Any, Dict, Tuple
 
 REPO_ROOT = Path(__file__).resolve().parents[4]
 CHECK_SCRIPT = Path(__file__).resolve().parent / "check_compliance.py"
 
 
-def _run_ok(cmd: list[str]) -> bool:
-    """Execute a subprocess command quietly and return True when exit code is 0."""
+def _run_ok(cmd: list[str]) -> Tuple[bool, str]:
+    """Execute a subprocess command quietly and return `(ok, concise_output)`."""
     proc = subprocess.run(cmd, cwd=str(REPO_ROOT), capture_output=True, text=True, check=False)
-    return proc.returncode == 0
+    out = (proc.stdout or proc.stderr or "").strip()
+    snippet = "\n".join(out.splitlines()[:5]) if proc.returncode != 0 and out else ""
+    return proc.returncode == 0, snippet
 
 
 def run_fast_audit(target_rel: str) -> Dict[str, Any]:
@@ -34,16 +36,29 @@ def run_fast_audit(target_rel: str) -> Dict[str, Any]:
         check=False,
     )
     compliant = False
+    errors: Dict[str, str] = {}
     if comp_proc.returncode == 0:
         compliant = bool(json.loads(comp_proc.stdout).get("compliant", False))
+    elif comp_proc.stdout.strip() or comp_proc.stderr.strip():
+        errors["compliance"] = (comp_proc.stdout or comp_proc.stderr).strip()[:300]
 
-    doctests_ok = _run_ok([sys.executable, "-m", "doctest", target_rel])
-    ruff_ok = _run_ok([sys.executable, "-m", "ruff", "check", "--quiet", target_rel])
-    mypy_ok = _run_ok(
+    doctests_ok, doc_err = _run_ok([sys.executable, "-m", "doctest", target_rel])
+    ruff_ok, ruff_err = _run_ok([sys.executable, "-m", "ruff", "check", "--quiet", target_rel])
+    mypy_ok, mypy_err = _run_ok(
         [sys.executable, "-m", "mypy", "--no-error-summary", "--hide-error-context", target_rel]
     )
-    pylint_ok = _run_ok([sys.executable, "-m", "pylint", "--reports=n", "--score=n", target_rel])
-    return {
+    pylint_ok, py_err = _run_ok(
+        [sys.executable, "-m", "pylint", "--reports=n", "--score=n", target_rel]
+    )
+    for key, err in (
+        ("doctests", doc_err),
+        ("ruff", ruff_err),
+        ("mypy", mypy_err),
+        ("pylint", py_err),
+    ):
+        if err:
+            errors[key] = err
+    res: Dict[str, Any] = {
         "target_file": target_rel,
         "compliant": compliant,
         "doctests_passed": doctests_ok,
@@ -52,6 +67,9 @@ def run_fast_audit(target_rel: str) -> Dict[str, Any]:
         "pylint_ok": pylint_ok,
         "lint_ok": ruff_ok and mypy_ok and pylint_ok,
     }
+    if errors:
+        res["errors"] = errors
+    return res
 
 
 def main() -> int:
