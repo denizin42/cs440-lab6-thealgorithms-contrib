@@ -33,4 +33,4 @@ skills: thealgorithms-contributing
 **Approval Status** - ready to merge, or changes needed
 
 ## Add to the output template
-**Obstacles Encountered**: Report any obstacles encountered during the review process. This can be setup issues, workarounds discovered or environment quirks, Report commands that needed a special flag or configuration. Report depenedencies or imports that caused problems.
+**Obstacles Encountered**: Report any obstacles encountered during the review process. This can be setup issues, workarounds discovered or environment quirks. Report commands that needed a special flag or configuration. Report depenedencies or imports that caused problems.

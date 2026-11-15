@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+import sqlite3
 import subprocess
 import sys
 from typing import Any, Dict
@@ -269,6 +270,27 @@ class TestPart5MCP:
                 fork_owner="denizin42",
                 branch_name="main",
             )
+        with pytest.raises(ValueError):
+            verify_contribution_target(
+                issue_number=15656,
+                target_file="maths/binomial_distribution.py",
+                fork_owner="denizin42",
+                branch_name="master",
+            )
+        with pytest.raises(ValueError):
+            verify_contribution_target(
+                issue_number=0,
+                target_file="maths/binomial_distribution.py",
+                fork_owner="denizin42",
+                branch_name="fix/issue-15656-binomial-overflow",
+            )
+        with pytest.raises(ValueError):
+            verify_contribution_target(
+                issue_number=15656,
+                target_file="maths/does_not_exist.py",
+                fork_owner="denizin42",
+                branch_name="fix/issue-15656-binomial-overflow",
+            )
 
     def test_part_5b_mcp_resource_issue_brief(self) -> None:
         """Verify `@mcp.resource` `thealgorithms://issue-brief` returns target dict."""
@@ -291,9 +313,9 @@ class TestPart6UpstreamGuardAndPRBuilder:
     """Verifies Part 6: PreToolUse Upstream PR Guard Hook & PR Template Builder Script."""
 
     def test_part_6a_prevent_upstream_pr_hook_script(self) -> None:
-        """Verify `scripts/prevent-upstream-pr.sh` blocks upstream `TheAlgorithms` PRs (exit 2)."""
-        script_path = REPO_ROOT / "scripts" / "prevent-upstream-pr.sh"
-        assert script_path.exists(), "TODO Part 6A: Create scripts/prevent-upstream-pr.sh"
+        """Verify `scripts/prevent-main-commit.sh` blocks upstream `TheAlgorithms` PRs (exit 2)."""
+        script_path = REPO_ROOT / "scripts" / "prevent-main-commit.sh"
+        assert script_path.exists(), "Missing scripts/prevent-main-commit.sh"
 
         # 1. Must block `gh pr create --repo TheAlgorithms/Python` with exit code 2
         blocked = subprocess.run(
@@ -306,7 +328,7 @@ class TestPart6UpstreamGuardAndPRBuilder:
             check=False,
         )
         assert blocked.returncode == 2, (
-            "TODO Part 6A: scripts/prevent-upstream-pr.sh must exit with code 2 when "
+            "scripts/prevent-main-commit.sh must exit with code 2 when "
             "a command targets TheAlgorithms/*"
         )
 
@@ -321,7 +343,7 @@ class TestPart6UpstreamGuardAndPRBuilder:
             check=False,
         )
         assert allowed.returncode == 0, (
-            "TODO Part 6A: scripts/prevent-upstream-pr.sh must exit 0 for personal fork PRs"
+            "scripts/prevent-main-commit.sh must exit 0 for personal fork PRs"
         )
 
     def test_part_6b_pr_template_builder_script(self) -> None:
@@ -350,3 +372,126 @@ class TestPart6UpstreamGuardAndPRBuilder:
         assert "Fixes #15656" in body
         assert "[x]" in body.lower()
         assert "CONTRIBUTING.md" in body
+
+
+class TestPart7PerformanceTracker:
+    """Verifies Part 7: Agent & Harness Performance Tracker (`scripts/track_performance.py`)."""
+
+    def test_part_7_agent_harness_performance_tracker(self, tmp_path: Path) -> None:
+        """Verify `scripts/track_performance.py` measures harness, context, and algo metrics."""
+        script_path = REPO_ROOT / "scripts" / "track_performance.py"
+        assert script_path.exists(), "Missing scripts/track_performance.py"
+
+        db_file = tmp_path / "perf.db"
+        report_file = tmp_path / "PERFORMANCE_REPORT.md"
+
+        # 1. Record v1 baseline run timing a simulated agent command
+        v1_proc = subprocess.run(
+            [
+                sys.executable,
+                str(script_path),
+                "--version",
+                "v1",
+                "--baseline",
+                "--label",
+                "v1 Baseline Harness",
+                "--agent-cmd",
+                f"{sys.executable} -c \"import time; time.sleep(0.05)\"",
+                "--db-file",
+                str(db_file),
+                "--report-file",
+                str(report_file),
+                "--json",
+            ],
+            cwd=str(REPO_ROOT),
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        assert v1_proc.returncode == 0, f"track_performance.py failed: {v1_proc.stderr}"
+        v1_metrics: Dict[str, Any] = json.loads(v1_proc.stdout)
+        for key in (
+            "version_tag",
+            "is_baseline",
+            "label",
+            "agent_duration_sec",
+            "harness_eval_ms",
+            "harness_score_pct",
+            "context_efficiency",
+            "algorithm_benchmark",
+            "feature_breakdown",
+        ):
+            assert key in v1_metrics, f"Missing '{key}' in performance metrics JSON"
+
+        assert v1_metrics["version_tag"] == "v1"
+        assert v1_metrics["is_baseline"] is True
+        assert v1_metrics["agent_duration_sec"] >= 0.04
+        assert v1_metrics["context_efficiency"]["compression_ratio_pct"] > 0.0
+        assert db_file.exists() and report_file.exists()
+
+        # 2. Record v2 tuned run and verify SQLite baseline comparison
+        v2_proc = subprocess.run(
+            [
+                sys.executable,
+                str(script_path),
+                "--version",
+                "v2",
+                "--label",
+                "v2 Tuned Prompts",
+                "--agent-duration-sec",
+                "0.02",
+                "--db-file",
+                str(db_file),
+                "--report-file",
+                str(report_file),
+                "--json",
+            ],
+            cwd=str(REPO_ROOT),
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        assert v2_proc.returncode == 0, f"v2 run failed: {v2_proc.stderr}"
+        v2_metrics: Dict[str, Any] = json.loads(v2_proc.stdout)
+        assert "delta_vs_baseline_sec" in v2_metrics
+        assert v2_metrics["delta_vs_baseline_sec"] < 0.0
+
+        with sqlite3.connect(db_file) as conn:
+            rows = conn.execute(
+                "SELECT version_tag, is_baseline, agent_duration_sec FROM agent_runs ORDER BY id"
+            ).fetchall()
+        assert len(rows) == 2
+        assert rows[0][0] == "v1" and rows[0][1] == 1
+        assert rows[1][0] == "v2" and rows[1][1] == 0
+
+        report_text = report_file.read_text(encoding="utf-8")
+        assert "xychart-beta" in report_text
+        assert "v1" in report_text and "v2" in report_text
+
+        for idx, line in enumerate(report_text.splitlines()[:-1]):
+            if line.startswith("#"):
+                assert report_text.splitlines()[idx + 1] == "", (
+                    f"MD022: Add a blank line after heading '{line}'"
+                )
+
+    def test_part_7b_requirements_txt_present_and_complete(self) -> None:
+        """Verify `requirements.txt` exists and declares all harness and lint dependencies."""
+        req_path = REPO_ROOT / "requirements.txt"
+        assert req_path.exists(), "Missing requirements.txt in repository root"
+        req_text = req_path.read_text(encoding="utf-8").lower()
+        for pkg in ("fastmcp", "pydantic", "pytest", "pylint", "mypy", "ruff"):
+            assert pkg in req_text, f"Missing '{pkg}' in requirements.txt"
+
+    def test_part_7c_ci_workflow_and_semver_changelog(self) -> None:
+        """Verify GitHub Actions CI installs requirements.txt & runs pytest, and SemVer 1.0.0."""
+        ci_text = (REPO_ROOT / ".github" / "workflows" / "pylint.yml").read_text(
+            encoding="utf-8"
+        )
+        assert "requirements.txt" in ci_text, "CI must install requirements.txt"
+        assert "pytest" in ci_text, "CI must execute pytest"
+
+        changelog_text = (REPO_ROOT / "CHANGELOG.md").read_text(encoding="utf-8")
+        assert "## [Unreleased]" in changelog_text
+        assert "## [1.0.0]" in changelog_text, (
+            "CHANGELOG.md must document Semantic Version [1.0.0] release"
+        )

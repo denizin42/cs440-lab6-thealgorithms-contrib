@@ -9,7 +9,6 @@ CLI usage:
     python3 .claude/skills/fork-pr-workflow/scripts/build_pr_body.py \\
         15656 maths/binomial_distribution.py "Fix float overflow for trials >= 171"
 """
-# pylint: disable=fixme
 
 from __future__ import annotations
 
@@ -21,30 +20,34 @@ TEMPLATE_PATH = REPO_ROOT / ".github" / "pull_request_template.md"
 
 
 def build_pr_body(issue_number: int, target_file: str, summary: str) -> str:
-    """Render `.github/pull_request_template.md` for a single-file bugfix PR.
+    """Render `.github/pull_request_template.md` for a single-file bugfix PR."""
+    template = TEMPLATE_PATH.read_text(encoding="utf-8")
 
-    ===========================================================================
-    TODO (Part 6B - PR Description Builder Script, Agent Skills Lecture Slide 8):
-    Read `TEMPLATE_PATH` (`.github/pull_request_template.md`) and return a
-    completed Markdown PR description that:
-      1. Includes `Fixes #<issue_number>` (per `CONTRIBUTING.md` "Issues" section
-         and `.github/pull_request_template.md` line 20).
-      2. Mentions `target_file` and `summary` under `### Describe your change`.
-      3. Marks the relevant checklist boxes as `[x]` (e.g., `Fix a bug or typo
-         in an existing algorithm?` and the `### Checklist` compliance items).
+    # Mark the bugfix item and all compliance checklist items as [x]
+    rendered_lines: list[str] = []
+    in_checklist = False
+    for line in template.splitlines():
+        if line.startswith("### Checklist"):
+            in_checklist = True
+            rendered_lines.append(line)
+            continue
 
-    HINTS:
-    - Inspect `.github/pull_request_template.md` to see the exact `* [ ]` lines.
-    - Test locally with:
-        pytest -k test_part_6b -v
-    ===========================================================================
-    """
-    _ = (issue_number, target_file, summary, TEMPLATE_PATH)
-    # TODO (Part 6B): Implement PR template rendering and return the Markdown string
-    raise NotImplementedError(
-        "TODO (Part 6B): Implement `build_pr_body` in "
-        "`.claude/skills/fork-pr-workflow/scripts/build_pr_body.py`."
-    )
+        if line == "### Describe your change":
+            rendered_lines.append(line)
+            rendered_lines.append("")
+            rendered_lines.append(
+                f"Fixes #{issue_number} in `{target_file}`: {summary}."
+            )
+            continue
+
+        if line.startswith("* [ ] Fix a bug or typo"):
+            rendered_lines.append(line.replace("* [ ]", "* [x]", 1))
+        elif in_checklist and line.startswith("* [ ] "):
+            rendered_lines.append(line.replace("* [ ]", "* [x]", 1))
+        else:
+            rendered_lines.append(line)
+
+    return "\n".join(rendered_lines) + "\n"
 
 
 def main() -> int:

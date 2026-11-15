@@ -14,12 +14,16 @@
 #   format (Subagents Slides 13–14).
 # ==============================================================================
 name: issue-researcher
-description: Researches CVE issues for 
-tools: []
-model: sonnet
-color: blue
+description: Investigate open issues and existing algorithms in the codebase without clusttering the main context window.
+tools: Grep Read WebFetch
 ---
 
 # Sub-Agent: `issue-researcher`
 
-TODO_PART_4A_WRITE_RESEARCHER_SYSTEM_PROMPT
+## Issues Researched
+**Issue** - issue number and description 
+**Summary** - what was researched, overall assessment
+**Fix Proposal** - describe fix for issue chosen and how the agent would implement the fix.
+
+## Add to the output template
+**Obstacles Encountered**: Report any obstacles encountered during the research process. This can be setup issues, workarounds discovered or environment quirks. Report commands that needed a special flag or configuration. Report depenedencies or imports that caused problems.
