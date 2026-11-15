@@ -28,6 +28,8 @@ if str(REPO_ROOT) not in sys.path:
 from mcp_server import (  # noqa: E402
     audit_contribution_prompt,
     get_issue_brief_resource,
+    get_issue_root_cause_context,
+    run_fast_compliance_audit,
     verify_contribution_target,
 )
 
@@ -834,3 +836,51 @@ class TestPart10AgentAgnosticSupport:
         assert "AGENT ?=" in makefile
         assert "claude" in makefile and "agy" in makefile
         assert "AGENT=claude" in readme or "claude" in readme.lower()
+
+
+class TestPart11McpFastAuditAndScopedSubagents:
+    """Verifies bundled fast_audit.py, new MCP tools, and scoped sub-agent prompts."""
+
+    def test_part_11a_fast_audit_skill_script(self) -> None:
+        """Verify fast_audit.py runs compliance, doctest, and lint in one compact JSON call."""
+        script_path = REPO_ROOT.joinpath(
+            ".claude", "skills", "denizin42-contributing", "scripts", "fast_audit.py"
+        )
+        assert script_path.exists(), "Missing fast_audit.py in denizin42-contributing/scripts/"
+        proc = subprocess.run(
+            [sys.executable, str(script_path), "maths/binomial_distribution.py"],
+            cwd=str(REPO_ROOT),
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        assert proc.returncode == 0, f"fast_audit.py failed: {proc.stderr or proc.stdout}"
+        data: Dict[str, Any] = json.loads(proc.stdout)
+        assert data["compliant"] is True
+        assert data["doctests_passed"] is True
+        assert data["lint_ok"] is True
+
+    def test_part_11b_mcp_get_issue_root_cause_context(self) -> None:
+        """Verify MCP tool get_issue_root_cause_context returns compact AST & check info."""
+        res = get_issue_root_cause_context("maths/binomial_distribution.py", 15656)
+        assert res["target_file"] == "maths/binomial_distribution.py"
+        assert res["issue_number"] == 15656
+        assert res["overflow_171_resolved"] is True
+        assert len(res["ast_functions"]) >= 1
+
+    def test_part_11c_mcp_run_fast_compliance_audit(self) -> None:
+        """Verify MCP tool run_fast_compliance_audit delegates to fast_audit.py."""
+        res = run_fast_compliance_audit("maths/binomial_distribution.py")
+        assert res["compliant"] is True
+        assert res["doctests_passed"] is True
+
+    def test_part_11d_subagents_scoped_to_local_repo(self) -> None:
+        """Verify sub-agents stay in current repo and use fast MCP/skill tools."""
+        researcher = (REPO_ROOT / ".claude" / "agents" / "issue-researcher.md").read_text(
+            encoding="utf-8"
+        )
+        reviewer = (REPO_ROOT / ".claude" / "agents" / "contributing-reviewer.md").read_text(
+            encoding="utf-8"
+        )
+        assert "get_issue_root_cause_context" in researcher
+        assert "fast_audit.py" in reviewer or "run_fast_compliance_audit" in reviewer

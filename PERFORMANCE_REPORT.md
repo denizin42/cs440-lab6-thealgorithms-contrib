@@ -1,15 +1,15 @@
 # CS 440 Lab 6 — Agent Algorithm-Fix Performance Report
 
-SQLite Database: `harness_performance.db` | Total Runs: **5** | Baseline: **`v1`** (v1 Agent Fix Run)
+SQLite Database: `harness_performance.db` | Total Runs: **6** | Baseline: **`v1`** (v1 Agent Fix Run)
 
 ---
 
-## 1. Baseline (`v1`) vs. Latest (`v5`) Algorithm-Fix Speed
+## 1. Baseline (`v1`) vs. Latest (`v6`) Algorithm-Fix Speed
 
-| Metric | Baseline (`v1`) | Latest (`v5`) | Delta / Status |
+| Metric | Baseline (`v1`) | Latest (`v6`) | Delta / Status |
 | :--- | :---: | :---: | :---: |
-| **Normalized Duration (incl. Cold Fork)** | `245.475 s` | `130.619 s` | `-114.8559 s (-46.8%)` |
-| **Total Agent Tokens** | `n/a` | `38,084` | `in=34,964, out=3,120` |
+| **Normalized Duration (incl. Cold Fork)** | `245.475 s` | `109.192 s` | `-136.2823 s (-55.5%)` |
+| **Total Agent Tokens** | `n/a` | `41,929` | `in=38,756, out=3,173` |
 | **Sub-Agents Invoked** | `unknown` | `issue-researcher, contributing-reviewer` | `issue-researcher` & `contributing-reviewer` |
 | **Issue #15656 (`n=171`) Fix** | `RESOLVED` | `RESOLVED` | `maths/binomial_distribution.py` |
 | **AST `CONTRIBUTING.md` Compliance** | `PASS` | `PASS` | `7` doctests |
@@ -21,10 +21,10 @@ SQLite Database: `harness_performance.db` | Total Runs: **5** | Baseline: **`v1`
 ```mermaid
 xychart-beta
     title "Agent Fix Duration (s) Across Harness Versions"
-    x-axis ["v1", "v2", "v3", "v4", "v5"]
+    x-axis ["v1", "v2", "v3", "v4", "v5", "v6"]
     y-axis "Agent Fix Duration (s)" 0 --> 306.84
-    bar [245.475, 45.724, 194.199, 208.213, 130.619]
-    line [245.475, 45.724, 194.199, 208.213, 130.619]
+    bar [245.475, 45.724, 194.199, 208.213, 130.619, 109.192]
+    line [245.475, 45.724, 194.199, 208.213, 130.619, 109.192]
 ```
 
 ---
@@ -38,3 +38,4 @@ xychart-beta
 | 3 | `v3` | Deduplicated target config/frontmatter, added Makefile, fork cleanup, and detailed stream-json token/subagent telemetry | `194.199s` (`+4.5s` fork) | `-51.2753 s (-20.9%)` | `53,210` | `issue-researcher, contributing-reviewer` | RESOLVED (7 doctests) |
 | 4 | `v4` | Added emoji & live sub-agent transcript streaming | `208.213s` (`+4.5s` fork) | `-37.2613 s (-15.2%)` | `73,886` | `issue-researcher, contributing-reviewer` | RESOLVED (7 doctests) |
 | 5 | `v5` | Stripped Phase 1 hints, routed subagents to flash in parallel, set --effort medium, and avoided redundant context re-reads | `130.619s` (`+4.5s` fork) | `-114.8559 s (-46.8%)` | `38,084` | `issue-researcher, contributing-reviewer` | RESOLVED (7 doctests) |
+| 6 | `v6` | Added fast_audit.py skill script, get_issue_root_cause_context & run_fast_compliance_audit MCP tools, and scoped subagents strictly to local repo | `109.192s` (`+4.5s` fork) | `-136.2823 s (-55.5%)` | `41,929` | `issue-researcher, contributing-reviewer` | RESOLVED (7 doctests) |
