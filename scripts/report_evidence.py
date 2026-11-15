@@ -118,8 +118,12 @@ def iter_recent_subagent_transcripts(
             if conv_id == main_conv_id or tpath.stat().st_mtime < start_epoch:
                 continue
             lines = tpath.read_text(encoding="utf-8", errors="ignore").splitlines()
-            if lines:
-                results.append((conv_id, lines))
+            if not lines:
+                continue
+            first_ts = _parse_step_ts(lines[0])
+            if not first_ts or first_ts < start_epoch - 5.0:
+                continue
+            results.append((conv_id, lines))
     return results
 
 

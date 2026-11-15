@@ -32,6 +32,7 @@ from typing import Any, Dict, List, Optional
 
 try:
     from scripts.report_evidence import (
+        _detect_subagent_role,
         collect_solution_evidence,
         collect_subagent_metrics,
         iter_recent_subagent_transcripts,
@@ -40,6 +41,7 @@ try:
     )
 except ImportError:
     from report_evidence import (  # type: ignore[import-not-found,no-redef]
+        _detect_subagent_role,
         collect_solution_evidence,
         collect_subagent_metrics,
         iter_recent_subagent_transcripts,
@@ -379,13 +381,14 @@ def _poll_subagent_transcripts(
     """Stream new tool calls from active sub-agent transcripts in real time."""
     elapsed = (time.perf_counter_ns() - start_ns) / 1_000_000_000.0
     for conv_id, lines in iter_recent_subagent_transcripts(start_epoch, main_conv_id):
+        role_name = _detect_subagent_role(lines)
         prev = seen_lines.get(conv_id, 0)
         for raw in lines[prev:]:
-            _print_subagent_step(raw, conv_id[:8], elapsed)
+            _print_subagent_step(raw, role_name, elapsed)
         seen_lines[conv_id] = len(lines)
 
 
-def _print_subagent_step(raw_json: str, short_id: str, elapsed: float) -> None:
+def _print_subagent_step(raw_json: str, role_name: str, elapsed: float) -> None:
     """Print one sub-agent tool call from a transcript JSONL line."""
     try:
         step = json.loads(raw_json)
@@ -397,7 +400,7 @@ def _print_subagent_step(raw_json: str, short_id: str, elapsed: float) -> None:
         detail = _summarize_tool_params(tc.get("arguments") or tc.get("args") or {})
         suffix = f" -> {detail}" if detail else ""
         print(
-            f"      [+{elapsed:5.1f}s]    🤖↳ [subagent:{short_id}] {icon} {name}{suffix}",
+            f"      [+{elapsed:5.1f}s]    🤖↳ [{role_name}] {icon} {name}{suffix}",
             flush=True,
         )
 

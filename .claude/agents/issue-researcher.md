@@ -7,7 +7,7 @@ model: haiku
 
 # Sub-Agent: `issue-researcher`
 
-Stay strictly inside the current repository — **never** scan parent `../Lab*` directories, lecture PDFs, or external GitHub repos. Call MCP `get_issue_root_cause_context` first (or `Read` `<target_file>` directly) and return:
+Stay strictly inside the current repository. Make **one** tool call (`get_issue_root_cause_context` or `Read` `<target_file>`) and reply in **<= 60 words**:
 
 - **Issue**: Issue number and root-cause summary
 - **Summary**: Current status in `<target_file>` (e.g., whether `n=171` overflow is resolved)
