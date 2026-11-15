@@ -10,10 +10,10 @@ from math import comb, exp, lgamma, log, log1p
 def binomial_distribution(successes: int, trials: int, prob: float) -> float:
     """
     Return probability of k successes out of n tries, with p probability for one
-    success
+    success.
 
-    The function uses ``math.comb`` to calculate the binomial coefficient,
-    falling back to log-space computation via ``lgamma`` for large inputs.
+    Uses ``math.comb`` when possible and falls back to log-space ``lgamma`` to
+    avoid integer-to-float overflow for large ``trials``.
 
     >>> binomial_distribution(3, 5, 0.7)
     0.30870000000000003
@@ -33,19 +33,17 @@ def binomial_distribution(successes: int, trials: int, prob: float) -> float:
     if not 0 < prob < 1:
         raise ValueError("prob has to be in range of 1 - 0")
     probability = (prob**successes) * ((1 - prob) ** (trials - successes))
-    # Calculate the binomial coefficient: n! / k!(n-k)!
     if probability > 0.0:
         try:
             return probability * comb(trials, successes)
         except OverflowError:
             pass
-    log_coeff = (
+    return exp(
         lgamma(trials + 1)
         - lgamma(successes + 1)
         - lgamma(trials - successes + 1)
-    )
-    return exp(
-        log_coeff + successes * log(prob) + (trials - successes) * log1p(-prob)
+        + successes * log(prob)
+        + (trials - successes) * log1p(-prob)
     )
 
 

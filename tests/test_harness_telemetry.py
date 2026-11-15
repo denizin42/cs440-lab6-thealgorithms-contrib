@@ -120,3 +120,16 @@ class TestPart14FastpathBundleAndSinglePassReview:
         assert "40 words" in reviewer or "single" in reviewer.lower()
         assert "get_phase2_fastpath_bundle" in makefile
         assert "flash_lite" in makefile or "haiku" in makefile
+
+
+class TestPart15AutoFormatAndParallelEdit:  # pylint: disable=too-few-public-methods
+    """Verifies fast_audit auto-formats ruff issues and Makefile uses fast src workflow pytest."""
+
+    def test_part_15a_fast_audit_auto_formats_and_fast_pytest(self) -> None:
+        """Verify fast_audit.py runs ruff format/fix and Makefile uses test_src_workflow.py."""
+        fast_audit = REPO_ROOT.joinpath(
+            ".claude", "skills", "denizin42-contributing", "scripts", "fast_audit.py"
+        ).read_text(encoding="utf-8")
+        assert "--fix" in fast_audit and "format" in fast_audit
+        makefile = (REPO_ROOT / "Makefile").read_text(encoding="utf-8")
+        assert "tests/test_src_workflow.py" in makefile

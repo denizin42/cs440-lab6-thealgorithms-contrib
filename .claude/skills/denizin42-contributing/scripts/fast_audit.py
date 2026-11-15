@@ -23,7 +23,9 @@ def _run_ok(cmd: list[str]) -> bool:
 
 
 def run_fast_audit(target_rel: str) -> Dict[str, Any]:
-    """Run compliance, doctest, ruff, mypy, and pylint on `target_rel`."""
+    """Auto-format minor ruff issues, then run compliance, doctest, ruff, mypy, and pylint."""
+    _run_ok([sys.executable, "-m", "ruff", "check", "--fix", "--quiet", target_rel])
+    _run_ok([sys.executable, "-m", "ruff", "format", "--quiet", target_rel])
     comp_proc = subprocess.run(
         [sys.executable, str(CHECK_SCRIPT), target_rel],
         cwd=str(REPO_ROOT),
