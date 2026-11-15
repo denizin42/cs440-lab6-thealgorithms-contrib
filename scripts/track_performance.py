@@ -159,7 +159,8 @@ def measure_harness_features() -> Dict[str, Any]:
             (
                 "not TestPart7PerformanceTracker and "
                 "not TestPart9MakefileCleanupAndTelemetry and "
-                "not TestPart10AgentAgnosticSupport"
+                "not TestPart10AgentAgnosticSupport and "
+                "not TestPart11McpFastAuditAndScopedSubagents"
             ),
             "-v",
             "--tb=no",

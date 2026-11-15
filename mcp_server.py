@@ -13,7 +13,12 @@ Exposes the three MCP building blocks to guide the AI agent on `TheAlgorithms/Py
 
 from __future__ import annotations
 
+import ast
+import importlib.util
+import json
 from pathlib import Path
+import subprocess
+import sys
 from typing import Any, Dict
 from mcp.server.mcpserver import MCPServer
 from pydantic import Field
@@ -149,6 +154,81 @@ def verify_contribution_target(
         f"Verified target: issue=#{issue_number}, file={target_file}, "
         f"fork={fork_owner}, branch={branch_name}"
     )
+
+
+@mcp.tool(
+    name="get_issue_root_cause_context",
+    description="Return compact AST outline and live Issue #15656 overflow check for target_file.",
+)
+def get_issue_root_cause_context(
+    target_file: str = Field(
+        default="maths/binomial_distribution.py",
+        description="Relative path to target Python algorithm file",
+    ),
+    issue_number: int = Field(default=15656, description="Upstream issue number"),
+) -> Dict[str, Any]:
+    """Inspect target_file locally in 1 call without scanning parent directories or GitHub."""
+    target_path = PROJECT_ROOT / target_file
+    if not target_path.is_file():
+        raise ValueError(f"target_file '{target_file}' does not exist.")
+    tree = ast.parse(target_path.read_text(encoding="utf-8"))
+    funcs = [
+        {
+            "name": node.name,
+            "line": node.lineno,
+            "args": [arg.arg for arg in node.args.args],
+        }
+        for node in ast.walk(tree)
+        if isinstance(node, ast.FunctionDef)
+    ]
+    overflow_resolved = False
+    if target_file == "maths/binomial_distribution.py":
+        spec = importlib.util.spec_from_file_location("binomial_distribution", target_path)
+        if spec and spec.loader:
+            mod = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(mod)
+            try:
+                val = mod.binomial_distribution(85, 171, 0.5)
+                overflow_resolved = isinstance(val, float) and 0.0 < val < 1.0
+            except (OverflowError, ValueError):
+                overflow_resolved = False
+    return {
+        "issue_number": issue_number,
+        "target_file": target_file,
+        "ast_functions": funcs,
+        "overflow_171_resolved": overflow_resolved,
+    }
+
+
+@mcp.tool(
+    name="run_fast_compliance_audit",
+    description="Run compliance, doctest, ruff, mypy, and pylint on target_file in one call.",
+)
+def run_fast_compliance_audit(
+    target_file: str = Field(
+        default="maths/binomial_distribution.py",
+        description="Relative path to target Python algorithm file",
+    ),
+) -> Dict[str, Any]:
+    """Execute bundled fast_audit.py and return its compact JSON summary."""
+    script = (
+        PROJECT_ROOT
+        / ".claude"
+        / "skills"
+        / "denizin42-contributing"
+        / "scripts"
+        / "fast_audit.py"
+    )
+    proc = subprocess.run(
+        [sys.executable, str(script), target_file],
+        cwd=str(PROJECT_ROOT),
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if not proc.stdout.strip():
+        raise RuntimeError(f"fast_audit.py produced no output: {proc.stderr}")
+    return dict(json.loads(proc.stdout))
 
 
 # ==============================================================================
