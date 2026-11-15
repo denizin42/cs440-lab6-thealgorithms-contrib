@@ -5,7 +5,7 @@ AGENT ?= auto
 VERSION ?= v_next
 LABEL ?= Harness Benchmark Run
 CHANGE ?= Latest harness update
-PROMPT ?= Follow CLAUDE.md: (1) Call MCP get_phase2_fastpath_bundle via call_mcp_tool (fork denizin42/Python already exists), (2) invoke issue-researcher (haiku/flash_lite, EnableMCPTools=true) to diagnose Issue #15656 in maths/binomial_distribution.py and implement the fix, (3) invoke contributing-reviewer ONCE post-edit (haiku/flash_lite) to run fast_audit.py + git status -s, (4) run DRY_RUN=false bash scripts/fork-and-submit-pr.sh and pytest tests/test_src_workflow.py -q --tb=short once at the end. Name both subagents invoked.
+PROMPT ?= Follow CLAUDE.md: (1) Call MCP get_phase2_fastpath_bundle via call_mcp_tool (fork denizin42/Python already exists), (2) invoke issue-researcher (haiku/flash_lite, EnableMCPTools=true) to diagnose Issue 15656 in maths/binomial_distribution.py, then apply the fix yourself, (3) invoke contributing-reviewer ONCE post-edit (haiku/flash_lite) to run fast_audit.py + git status -s, (4) run DRY_RUN=false bash scripts/fork-and-submit-pr.sh and pytest tests/test_src_workflow.py -q --tb=short once at the end. NEVER output a final summary until all 4 steps are complete; name both subagents invoked.
 
 help: ## Show available Lab 6 commands for Professor & TA
 	@grep -E '^[a-zA-Z0-9_-]+:.*?## .*$$' $(MAKEFILE_LIST) | \

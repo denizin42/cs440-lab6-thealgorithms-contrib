@@ -18,6 +18,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Fix unescaped `#15656` Make comment in `Makefile` `PROMPT` that truncated steps `(3)` and `(4)`, add explicit no-early-exit rule in `context/phase2-fastpath.md` and `Makefile`, and record `v12` (`93.318s`, `59,295` tokens, `RESOLVED`) in `PERFORMANCE_REPORT.md`
+
 - Display sub-agent role names (`[issue-researcher]`, `[contributing-reviewer]`) instead of `[subagent:<id>]` in live console output and filter out pre-existing transcripts in `iter_recent_subagent_transcripts()`
 - Fix `_detect_subagent_role()` in `scripts/report_evidence.py` so `issue-researcher` (`fbd44a9e`) and `contributing-reviewer` (`2eb5608c`) are accurately labeled in `PERFORMANCE_REPORT.md`
 - Instruct benchmark `PROMPT` in `Makefile` to invoke MCP tools (`verify_contribution_target`, `get_issue_root_cause_context`, `run_fast_compliance_audit`) with `EnableMCPTools=true`

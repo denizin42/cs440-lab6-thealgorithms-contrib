@@ -13,3 +13,5 @@ Use this pre-digested map instead of running exploratory `ls`, `grep`, or redund
    - Run `issue-researcher` (`flash_lite`/`haiku`) to diagnose the bug **before** reviewing.
    - Edit `maths/binomial_distribution.py`, then invoke `contributing-reviewer` (`flash_lite`/`haiku`) **once post-edit** to run `fast_audit.py maths/binomial_distribution.py` (which auto-fixes minor `ruff` formatting and returns exact lint/compliance errors).
    - Submit fork-only PR via `DRY_RUN=false bash scripts/fork-and-submit-pr.sh`, then run `pytest tests/test_src_workflow.py -q --tb=short` once.
+5. **Never Stop Early on Sub-Agent Wakeup**:
+   - Do **not** output a final summary or end your turn without tool calls until `maths/binomial_distribution.py` is edited, `contributing-reviewer` has audited it, `DRY_RUN=false bash scripts/fork-and-submit-pr.sh` has succeeded, and `pytest tests/test_src_workflow.py -q --tb=short` has passed.
