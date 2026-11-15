@@ -426,7 +426,6 @@ class TestPart7PerformanceTracker:
         assert v1_metrics["version_tag"] == "v1"
         assert v1_metrics["is_baseline"] is True
         assert v1_metrics["agent_duration_sec"] >= 0.04
-        assert v1_metrics["context_efficiency"]["compression_ratio_pct"] > 0.0
         assert db_file.exists() and report_file.exists()
 
         # 2. Record v2 tuned run and verify SQLite baseline comparison
@@ -466,6 +465,7 @@ class TestPart7PerformanceTracker:
 
         report_text = report_file.read_text(encoding="utf-8")
         assert "xychart-beta" in report_text
+        assert "Agent Fix Duration" in report_text
         assert "v1" in report_text and "v2" in report_text
 
         for idx, line in enumerate(report_text.splitlines()[:-1]):
