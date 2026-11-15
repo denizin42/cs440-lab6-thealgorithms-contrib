@@ -618,3 +618,95 @@ class TestPart8HarnessDeduplicationAndConsistency:
             assert "maths/binomial_distribution.py" not in text, (
                 f"Keep target_file centralized in CLAUDE.md/mcp_server.py, not {rel}"
             )
+
+
+class TestPart9MakefileCleanupAndTelemetry:
+    """Verifies Makefile, fork cleanup script, README quickstart, and token/subagent telemetry."""
+
+    def test_part_9a_makefile_targets(self) -> None:
+        """Verify Makefile exists with install, test, lint, compliance, benchmark, cleanup-fork."""
+        makefile = REPO_ROOT / "Makefile"
+        assert makefile.exists(), "Missing Makefile in repository root"
+        text = makefile.read_text(encoding="utf-8")
+        for target in (
+            "install:",
+            "test:",
+            "lint:",
+            "compliance:",
+            "demo-dry-run:",
+            "benchmark:",
+            "cleanup-fork:",
+        ):
+            assert target in text, f"Missing '{target}' in Makefile"
+
+    def test_part_9b_cleanup_fork_script_safety(self) -> None:
+        """Verify scripts/cleanup-fork.sh exists and blocks upstream TheAlgorithms/*."""
+        script_path = REPO_ROOT / "scripts" / "cleanup-fork.sh"
+        assert script_path.exists(), "Missing scripts/cleanup-fork.sh"
+        blocked = subprocess.run(
+            ["bash", str(script_path)],
+            cwd=str(REPO_ROOT),
+            env={
+                "PATH": "/usr/bin:/bin:/usr/local/bin:/opt/homebrew/bin",
+                "FORK_OWNER": "TheAlgorithms",
+            },
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        assert blocked.returncode != 0, "cleanup-fork.sh must refuse FORK_OWNER=TheAlgorithms"
+
+    def test_part_9c_perf_tracker_tokens_subagents_and_changelog(self, tmp_path: Path) -> None:
+        """Verify track_performance.py records tokens, subagents_used, and changelog_entry."""
+        tracker = REPO_ROOT / "scripts" / "track_performance.py"
+        db_file = tmp_path / "perf.db"
+        report_file = tmp_path / "REPORT.md"
+        fake_json_cmd = (
+            "python3 -c 'import json; print(json.dumps({"
+            "\"response\": \"Invoked issue-researcher and contributing-reviewer\", "
+            "\"usage\": {\"input_tokens\": 1200, \"output_tokens\": 300, \"total_tokens\": 1500}"
+            "}))'"
+        )
+        proc = subprocess.run(
+            [
+                sys.executable,
+                str(tracker),
+                "--version",
+                "v_test",
+                "--baseline",
+                "--label",
+                "Telemetry Test",
+                "--change",
+                "Added token and subagent tracking",
+                "--agent-cmd",
+                fake_json_cmd,
+                "--db-file",
+                str(db_file),
+                "--report-file",
+                str(report_file),
+            ],
+            cwd=str(REPO_ROOT),
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        assert proc.returncode == 0, f"track_performance.py failed: {proc.stderr or proc.stdout}"
+        conn = sqlite3.connect(db_file)
+        conn.row_factory = sqlite3.Row
+        row = dict(conn.execute("SELECT * FROM agent_runs WHERE version_tag='v_test'").fetchone())
+        conn.close()
+        assert row["total_tokens"] == 1500
+        assert "issue-researcher" in row["subagents_used"]
+        assert "contributing-reviewer" in row["subagents_used"]
+        assert "Added token and subagent tracking" in row["changelog_entry"]
+        report_text = report_file.read_text(encoding="utf-8")
+        assert "1,500" in report_text or "1500" in report_text
+        assert "issue-researcher" in report_text
+
+    def test_part_9d_readme_professor_ta_quickstart(self) -> None:
+        """Verify README.md documents Professor/TA quickstart and Makefile targets."""
+        readme = (REPO_ROOT / "README.md").read_text(encoding="utf-8")
+        assert "make test" in readme
+        assert "make benchmark" in readme
+        assert "make cleanup-fork" in readme
+        assert "PERFORMANCE_REPORT.md" in readme
