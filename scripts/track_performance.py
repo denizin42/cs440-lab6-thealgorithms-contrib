@@ -61,7 +61,8 @@ CREATE TABLE IF NOT EXISTS agent_runs (
     output_tokens INTEGER NOT NULL DEFAULT 0,
     total_tokens INTEGER NOT NULL DEFAULT 0,
     subagents_used TEXT NOT NULL DEFAULT 'unknown',
-    changelog_entry TEXT NOT NULL DEFAULT ''
+    changelog_entry TEXT NOT NULL DEFAULT '',
+    fork_overhead_sec REAL NOT NULL DEFAULT 0.0
 );
 """
 
@@ -71,6 +72,7 @@ MIGRATION_COLUMNS = (
     ("total_tokens", "INTEGER NOT NULL DEFAULT 0"),
     ("subagents_used", "TEXT NOT NULL DEFAULT 'unknown'"),
     ("changelog_entry", "TEXT NOT NULL DEFAULT ''"),
+    ("fork_overhead_sec", "REAL NOT NULL DEFAULT 0.0"),
 )
 
 
@@ -427,8 +429,9 @@ def record_run(
             progressive_skill_savings_pct, raw_contributing_tokens,
             curated_context_tokens, ast_compliant, doctests_attempted,
             overflow_171_resolved, algo_exec_ms, feature_breakdown_json, notes,
-            input_tokens, output_tokens, total_tokens, subagents_used, changelog_entry
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            input_tokens, output_tokens, total_tokens, subagents_used, changelog_entry,
+            fork_overhead_sec
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
         (
             snapshot["version_tag"],
@@ -457,6 +460,7 @@ def record_run(
             snapshot["total_tokens"],
             snapshot["subagents_used"],
             snapshot["changelog_entry"],
+            snapshot["fork_overhead_sec"],
         ),
     )
     conn.commit()
@@ -479,14 +483,22 @@ def _format_delta(current: float, baseline: float, unit: str) -> str:
     return f"{sign}{diff} {unit}"
 
 
+def _effective_duration(row: Dict[str, Any]) -> float:
+    """Return agent duration normalized with initial fork overhead."""
+    return round(
+        float(row["agent_duration_sec"]) + float(row.get("fork_overhead_sec", 0.0) or 0.0),
+        4,
+    )
+
+
 def _build_chart_series(runs: List[Dict[str, Any]]) -> Dict[str, Any]:
     """Compute x/y series strings and axis bounds for Mermaid xychart-beta graphs."""
     recent = runs[-10:]
-    max_sec = max([r["agent_duration_sec"] for r in recent] + [1.0])
+    max_sec = max([_effective_duration(r) for r in recent] + [1.0])
     max_ms = max([r["harness_eval_ms"] for r in recent] + [100.0])
     return {
         "x_versions": ", ".join(f'"{r["version_tag"]}"' for r in recent),
-        "y_agent_secs": ", ".join(str(round(r["agent_duration_sec"], 3)) for r in recent),
+        "y_agent_secs": ", ".join(str(round(_effective_duration(r), 3)) for r in recent),
         "y_eval_ms": ", ".join(str(round(r["harness_eval_ms"], 1)) for r in recent),
         "y_scores": ", ".join(str(round(r["harness_score_pct"], 1)) for r in recent),
         "y_sec_max": round(max_sec * 1.25, 2),
@@ -500,25 +512,35 @@ def _format_tokens(val: Any) -> str:
     return f"`{count:,}`" if count > 0 else "`n/a`"
 
 
+def _format_history_row(row: Dict[str, Any], base_eff: float) -> str:
+    """Format a single run row for the Markdown history table."""
+    tag = f"`{row['version_tag']}`" + (" **(Baseline)**" if row["is_baseline"] else "")
+    eff_s = _effective_duration(row)
+    fork_s = float(row.get("fork_overhead_sec", 0.0) or 0.0)
+    dur_cell = (
+        f"`{eff_s:.3f}s` (`+{fork_s:.1f}s` fork)"
+        if fork_s > 0
+        else f"`{eff_s:.3f}s` (cold fork)"
+    )
+    delta_s = _format_delta(eff_s, base_eff, "s")
+    issue_status = "RESOLVED" if row["overflow_171_resolved"] else "UNRESOLVED"
+    sub_str = row.get("subagents_used", "unknown") or "unknown"
+    chg_str = row.get("changelog_entry", "") or row["label"]
+    return (
+        f"| {row['id']} | {tag} | {chg_str} | {dur_cell} | "
+        f"`{delta_s}` | {_format_tokens(row.get('total_tokens'))} | `{sub_str}` | {issue_status} "
+        f"({row['doctests_attempted']} doctests) |"
+    )
+
+
 def render_markdown_report(runs: List[Dict[str, Any]], db_path: Path) -> str:
     """Render `PERFORMANCE_REPORT.md` focused on agent algorithm-fix speed."""
     latest = runs[-1]
     baseline = next((r for r in runs if r["is_baseline"] == 1), runs[0])
     chart = _build_chart_series(runs)
-
-    history_rows = []
-    for r in runs:
-        tag = f"`{r['version_tag']}`" + (" **(Baseline)**" if r["is_baseline"] else "")
-        delta_s = _format_delta(r["agent_duration_sec"], baseline["agent_duration_sec"], "s")
-        issue_status = "RESOLVED" if r["overflow_171_resolved"] else "UNRESOLVED"
-        sub_str = r.get("subagents_used", "unknown") or "unknown"
-        chg_str = r.get("changelog_entry", "") or r["label"]
-        history_rows.append(
-            f"| {r['id']} | {tag} | {chg_str} | `{r['agent_duration_sec']:.3f}s` | "
-            f"`{delta_s}` | {_format_tokens(r.get('total_tokens'))} | `{sub_str}` | {issue_status} "
-            f"({r['doctests_attempted']} doctests) |"
-        )
-    history_table = "\n".join(history_rows)
+    base_eff = _effective_duration(baseline)
+    lat_eff = _effective_duration(latest)
+    history_table = "\n".join(_format_history_row(r, base_eff) for r in runs)
 
     return f"""# CS 440 Lab 6 — Agent Algorithm-Fix Performance Report
 
@@ -530,7 +552,7 @@ SQLite Database: `{db_path.name}` | Total Runs: **{len(runs)}** | Baseline: **`{
 
 | Metric | Baseline (`{baseline["version_tag"]}`) | Latest (`{latest["version_tag"]}`) | Delta / Status |
 | :--- | :---: | :---: | :---: |
-| **Agent Fix Duration** | `{baseline["agent_duration_sec"]:.3f} s` | `{latest["agent_duration_sec"]:.3f} s` | `{_format_delta(latest["agent_duration_sec"], baseline["agent_duration_sec"], "s")}` |
+| **Normalized Duration (incl. Cold Fork)** | `{base_eff:.3f} s` | `{lat_eff:.3f} s` | `{_format_delta(lat_eff, base_eff, "s")}` |
 | **Total Agent Tokens** | {_format_tokens(baseline.get("total_tokens"))} | {_format_tokens(latest.get("total_tokens"))} | `in={latest.get("input_tokens", 0):,}, out={latest.get("output_tokens", 0):,}` |
 | **Sub-Agents Invoked** | `{baseline.get("subagents_used", "unknown")}` | `{latest.get("subagents_used", "unknown")}` | `issue-researcher` & `contributing-reviewer` |
 | **Issue #15656 (`n=171`) Fix** | `{"RESOLVED" if baseline["overflow_171_resolved"] else "UNRESOLVED"}` | `{"RESOLVED" if latest["overflow_171_resolved"] else "UNRESOLVED"}` | `maths/binomial_distribution.py` |
@@ -606,6 +628,7 @@ def _build_snapshot(
         "total_tokens": int(telemetry.get("total_tokens", 0)),
         "subagents_used": str(telemetry.get("subagents_used", "unknown")),
         "changelog_entry": args.change or _latest_changelog_entry() or args.label,
+        "fork_overhead_sec": round(float(args.fork_overhead_sec), 4),
     }
 
 
@@ -637,6 +660,12 @@ def main() -> int:
         help="Manual agent run duration in seconds (when not using --agent-cmd)",
     )
     parser.add_argument("--change", default="", help="Changelog / change description for this run")
+    parser.add_argument(
+        "--fork-overhead-sec",
+        type=float,
+        default=0.0,
+        help="Initial fork time (s) added to normalize runs that skipped cold-forking",
+    )
     parser.add_argument("--notes", default="", help="Optional tuning notes")
     parser.add_argument("--db-file", default=str(DEFAULT_DB_FILE), help="SQLite DB path")
     parser.add_argument(
