@@ -9,7 +9,7 @@
 # - Check Subagents Slide 9 & 15 for which tools a code reviewer needs (and which
 #   file-modifying tools it should NOT have).
 # - Check Agent Skills Slide 17 ("Subagents start fresh, so preload skills") for
-#   how a sub-agent can preload your `thealgorithms-contributing` skill and keep
+#   how a sub-agent can preload your `denizin42-contributing` skill and keep
 #   the ability to invoke skills.
 # - Check Subagents Slides 11–12 for how the `description` steers both automatic
 #   delegation and what the parent agent includes in the sub-agent's input prompt.
@@ -18,8 +18,8 @@
 # ==============================================================================
 name: contributing-reviewer
 description: Use this agent for auditing code changes to the algorithm file against `CONTRIBUTING.md` for quality, security, and best practice compliance before commiting. You must tell the agent precisely which files you want it to review.
-tools: Bash, Glob, Grep, python3, Read, WebFetch, WebSearch
-skills: thealgorithms-contributing
+tools: Bash, Glob, Grep, Read, WebFetch, WebSearch
+skills: denizin42-contributing
 ---
 
 # Sub-Agent: `contributing-reviewer`

@@ -131,7 +131,7 @@ def verify_contribution_target(
         description="Personal GitHub fork owner (never TheAlgorithms)",
     ),
     branch_name: str = Field(
-        default="fix/issue-15656-binomial-overflow",
+        default="feature/fix_binomial_distribution",
         description="Feature branch name (never main or master)",
     ),
 ) -> str:

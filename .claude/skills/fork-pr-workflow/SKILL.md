@@ -11,7 +11,7 @@
 # ==============================================================================
 name: fork-pr-workflow
 description: Forks the original repository to `denizin42` and sets up branch rules and a template for creating pull requests
-allowed-tools: python gh git Read Grep Glob Bash
+allowed-tools: Bash, Read, Grep, Glob
 ---
 
 # Safe Fork & Pull Request Workflow Skill

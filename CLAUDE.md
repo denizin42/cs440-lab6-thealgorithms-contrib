@@ -23,7 +23,7 @@ This repository follows the same two-phase **Context Engineering** pattern as La
 To avoid **Context Bloat** (Context Engineering Lecture Slide 15), `CLAUDE.md` stores only the high-level **orchestration protocol and Phase 2 deliverables**, while detailed rules live in `@./context/*.md` and `.claude/skills/*/SKILL.md`:
 
 - **Single-Source Context Routing**:
-  - Detailed coding style, `PEP 484` type hints, `doctest` requirements, and `ruff`/`mypy` checks $\rightarrow$ defined once in `@./context/contributing-rules.md` (and audited via `.claude/skills/thealgorithms-contributing/SKILL.md`).
+  - Detailed coding style, `PEP 484` type hints, `doctest` requirements, and `ruff`/`mypy` checks $\rightarrow$ defined once in `@./context/contributing-rules.md` (and audited via `.claude/skills/denizin42-contributing/SKILL.md`).
   - Personal fork safety (`denizin42`, never `TheAlgorithms/*`) and `.github/pull_request_template.md` formatting $\rightarrow$ defined once in `@./context/fork-pr-workflow.md` (and executed via `.claude/skills/fork-pr-workflow/SKILL.md`).
 
 ### Phase 2 Agent Deliverables (`src/` & Target Issue Fix)
