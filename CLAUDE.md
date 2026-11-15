@@ -33,6 +33,7 @@ To avoid **Context Bloat** (Context Engineering Lecture Slide 15), `CLAUDE.md` s
    - An AST-based `CONTRIBUTING.md` compliance checker (verifying `snake_case`, PEP 484 type hints, docstrings, `>>>` doctests, and no `input()`).
    - A fork/PR safety validator that blocks `TheAlgorithms/*` and renders the `.github/pull_request_template.md` checklist.
 3. Verify via MCP (`verify_contribution_target`) and sub-agents (`issue-researcher`, `contributing-reviewer`), and document results in `CONTRIBUTION_REPORT.md`.
+4. Fork `TheAlgorithms/Python` to `denizin42/Python` and open the fork-only PR inside `denizin42/Python` by running `DRY_RUN=false bash scripts/fork-and-submit-pr.sh` (never target upstream `TheAlgorithms/*`).
 
 ---
 
