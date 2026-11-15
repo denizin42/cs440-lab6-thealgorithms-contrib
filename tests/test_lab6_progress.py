@@ -922,3 +922,23 @@ class TestPart12PerfReportProofAndSubagentBreakdown:
         assert "def binomial_distribution(" in report
         assert "7 passed and 0 failed" in report
         assert "fast_audit.py" in report or '"compliant": true' in report
+
+    def test_part_12b_subagent_role_detection_and_mcp_prompt(self) -> None:
+        """Verify researcher vs reviewer role detection and MCP tool usage in Makefile PROMPT."""
+        # pylint: disable=import-outside-toplevel
+        from scripts.report_evidence import _detect_subagent_role
+
+        researcher_lines = [
+            json.dumps({"content": "Analyze Issue #15656 in maths/binomial_distribution.py"}),
+            json.dumps({"content": "Note: check CONTRIBUTING compliance_checker.py too"}),
+        ]
+        reviewer_lines = [
+            json.dumps({"content": "Audit maths/binomial_distribution.py against CONTRIBUTING.md"}),
+            json.dumps({"content": "Running fast_audit.py"}),
+        ]
+        assert _detect_subagent_role(researcher_lines) == "issue-researcher"
+        assert _detect_subagent_role(reviewer_lines) == "contributing-reviewer"
+
+        makefile = (REPO_ROOT / "Makefile").read_text(encoding="utf-8")
+        assert "get_issue_root_cause_context" in makefile
+        assert "verify_contribution_target" in makefile

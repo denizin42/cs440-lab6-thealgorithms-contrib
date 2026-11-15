@@ -49,7 +49,7 @@ xychart-beta
 | :--- | :---: | :---: | :--- |
 | **Main Orchestrator** (`v7`) | `125.26 s` | `44,668` | Coordinates fork, sub-agents, PR & final verification |
 | Sub-Agent: `contributing-reviewer` (`2eb5608c`) | `39.00 s` | `26,583` | Isolated context research / `CONTRIBUTING.md` audit |
-| Sub-Agent: `contributing-reviewer` (`fbd44a9e`) | `25.00 s` | `23,548` | Isolated context research / `CONTRIBUTING.md` audit |
+| Sub-Agent: `issue-researcher` (`fbd44a9e`) | `25.00 s` | `23,548` | Isolated context research / `CONTRIBUTING.md` audit |
 
 ---
 
@@ -143,5 +143,5 @@ Test passed.
 
 ```text
 .....                                                                    [100%]
-5 passed in 0.01s
+5 passed in 0.02s
 ```

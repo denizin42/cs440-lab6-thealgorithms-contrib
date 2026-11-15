@@ -35,10 +35,15 @@ def _parse_step_tokens(raw_json: str) -> int:
 
 def _detect_subagent_role(lines: List[str]) -> str:
     """Infer subagent role name from initial transcript lines."""
+    prompt_line = lines[0] if lines else ""
     head = "\n".join(lines[:5])
     for name in ("issue-researcher", "contributing-reviewer"):
-        if name in head:
+        if name in prompt_line or name in head:
             return name
+    if "fast_audit" in prompt_line or "Audit " in prompt_line:
+        return "contributing-reviewer"
+    if "15656" in prompt_line or "Analyze Issue" in prompt_line or "overflow" in prompt_line:
+        return "issue-researcher"
     if "fast_audit" in head or "CONTRIBUTING" in head:
         return "contributing-reviewer"
     if "15656" in head or "binomial_distribution" in head:
