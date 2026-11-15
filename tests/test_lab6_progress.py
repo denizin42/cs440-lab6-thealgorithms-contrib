@@ -884,3 +884,41 @@ class TestPart11McpFastAuditAndScopedSubagents:
         )
         assert "get_issue_root_cause_context" in researcher
         assert "fast_audit.py" in reviewer or "run_fast_compliance_audit" in reviewer
+
+
+class TestPart12PerfReportProofAndSubagentBreakdown:
+    """Verifies PERFORMANCE_REPORT.md includes sub-agent breakdown, code snippet, and test proof."""
+
+    def test_part_12a_report_includes_subagent_breakdown_and_proof(self, tmp_path: Path) -> None:
+        """Verify track_performance.py renders subagent table, fix snippet, and doctest proof."""
+        tracker = REPO_ROOT / "scripts" / "track_performance.py"
+        db_file = tmp_path / "proof.db"
+        report_file = tmp_path / "PROOF_REPORT.md"
+        proc = subprocess.run(
+            [
+                sys.executable,
+                str(tracker),
+                "--version",
+                "v_proof",
+                "--baseline",
+                "--label",
+                "Proof Run",
+                "--agent-duration-sec",
+                "12.0",
+                "--db-file",
+                str(db_file),
+                "--report-file",
+                str(report_file),
+            ],
+            cwd=str(REPO_ROOT),
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        assert proc.returncode == 0, f"track_performance.py failed: {proc.stderr or proc.stdout}"
+        report = report_file.read_text(encoding="utf-8")
+        assert "Main Agent vs. Sub-Agent Breakdown" in report
+        assert "Phase 2 Deliverables, Issue `#15656` Fix & Passing Test Evidence" in report
+        assert "def binomial_distribution(" in report
+        assert "7 passed and 0 failed" in report
+        assert "fast_audit.py" in report or '"compliant": true' in report
