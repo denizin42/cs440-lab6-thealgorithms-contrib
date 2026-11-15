@@ -1,15 +1,15 @@
 # CS 440 Lab 6 — Agent Algorithm-Fix Performance Report
 
-SQLite Database: `harness_performance.db` | Total Runs: **9** | Baseline: **`v1`** (v1 Agent Fix Run)
+SQLite Database: `harness_performance.db` | Total Runs: **10** | Baseline: **`v1`** (v1 Agent Fix Run)
 
 ---
 
-## 1. Baseline (`v1`) vs. Latest (`v9`) Algorithm-Fix Speed
+## 1. Baseline (`v1`) vs. Latest (`v10`) Algorithm-Fix Speed
 
-| Metric | Baseline (`v1`) | Latest (`v9`) | Delta / Status |
+| Metric | Baseline (`v1`) | Latest (`v10`) | Delta / Status |
 | :--- | :---: | :---: | :---: |
-| **Normalized Duration (incl. Cold Fork)** | `245.475 s` | `108.264 s` | `-137.2105 s (-55.9%)` |
-| **Total Agent Tokens** | `n/a` | `57,224` | `in=49,460, out=7,764` |
+| **Normalized Duration (incl. Cold Fork)** | `245.475 s` | `110.805 s` | `-134.6694 s (-54.9%)` |
+| **Total Agent Tokens** | `n/a` | `60,782` | `in=53,264, out=7,518` |
 | **Sub-Agents Invoked** | `unknown` | `issue-researcher, contributing-reviewer` | `issue-researcher` & `contributing-reviewer` |
 | **Issue #15656 (`n=171`) Fix** | `RESOLVED` | `RESOLVED` | `maths/binomial_distribution.py` |
 | **AST `CONTRIBUTING.md` Compliance** | `PASS` | `PASS` | `4` doctests |
@@ -21,10 +21,10 @@ SQLite Database: `harness_performance.db` | Total Runs: **9** | Baseline: **`v1`
 ```mermaid
 xychart-beta
     title "Agent Fix Duration (s) Across Harness Versions"
-    x-axis ["v1", "v2", "v3", "v4", "v5", "v6", "v7", "v8", "v9"]
+    x-axis ["v1", "v2", "v3", "v4", "v5", "v6", "v7", "v8", "v9", "v10"]
     y-axis "Agent Fix Duration (s)" 0 --> 306.84
-    bar [245.475, 45.724, 194.199, 208.213, 130.619, 109.192, 129.762, 98.587, 108.264]
-    line [245.475, 45.724, 194.199, 208.213, 130.619, 109.192, 129.762, 98.587, 108.264]
+    bar [245.475, 45.724, 194.199, 208.213, 130.619, 109.192, 129.762, 98.587, 108.264, 110.805]
+    line [245.475, 45.724, 194.199, 208.213, 130.619, 109.192, 129.762, 98.587, 108.264, 110.805]
 ```
 
 ---
@@ -42,16 +42,17 @@ xychart-beta
 | 7 | `v7` | Added Main vs Sub-Agent duration/token breakdown and Issue #15656 code snippet + live test proof to PERFORMANCE_REPORT.md | `129.762s` (`+4.5s` fork) | `-115.7121 s (-47.1%)` | `44,668` | `issue-researcher, contributing-reviewer` | RESOLVED (7 doctests) |
 | 8 | `v8` | Reset maths/binomial_distribution.py to buggy Issue #15656 before timed agent run and invoke MCP tools | `98.587s` (`+4.5s` fork) | `-146.8881 s (-59.8%)` | `51,727` | `issue-researcher, contributing-reviewer` | RESOLVED (7 doctests) |
 | 9 | `v9` | Added context/phase2-fastpath.md, MCP get_phase2_fastpath_bundle, flash_lite subagents, and single-pass post-edit review | `108.264s` (`+4.5s` fork) | `-137.2105 s (-55.9%)` | `57,224` | `issue-researcher, contributing-reviewer` | RESOLVED (4 doctests) |
+| 10 | `v10` | Auto-fix ruff in fast_audit.py, edit in parallel with issue-researcher, and run fast test_src_workflow.py | `110.805s` (`+4.5s` fork) | `-134.6694 s (-54.9%)` | `60,782` | `issue-researcher, contributing-reviewer` | RESOLVED (4 doctests) |
 
 ---
 
-## 4. Main Agent vs. Sub-Agent Breakdown (`v9`)
+## 4. Main Agent vs. Sub-Agent Breakdown (`v10`)
 
 | Agent Role | Duration | Tokens | Responsibility |
 | :--- | :---: | :---: | :--- |
-| **Main Orchestrator** (`v9`) | `103.76 s` | `57,224` | Coordinates fork, sub-agents, PR & final verification |
-| Sub-Agent: `contributing-reviewer` (`dd3dc809`) | `5.00 s` | `14,320` | Isolated context research / `CONTRIBUTING.md` audit |
-| Sub-Agent: `issue-researcher` (`2efa5acc`) | `4.00 s` | `12,127` | Isolated context research / `CONTRIBUTING.md` audit |
+| **Main Orchestrator** (`v10`) | `106.31 s` | `60,782` | Coordinates fork, sub-agents, PR & final verification |
+| Sub-Agent: `issue-researcher` (`11de883a`) | `3.00 s` | `9,613` | Isolated context research / `CONTRIBUTING.md` audit |
+| Sub-Agent: `contributing-reviewer` (`fcc1da2d`) | `5.00 s` | `14,469` | Isolated context research / `CONTRIBUTING.md` audit |
 
 ---
 
@@ -66,10 +67,10 @@ xychart-beta
 def binomial_distribution(successes: int, trials: int, prob: float) -> float:
     """
     Return probability of k successes out of n tries, with p probability for one
-    success
+    success.
 
-    The function uses ``math.comb`` to calculate the binomial coefficient,
-    falling back to log-space computation via ``lgamma`` for large inputs.
+    Uses ``math.comb`` when possible and falls back to log-space ``lgamma`` to
+    avoid integer-to-float overflow for large ``trials``.
 
     0.30870000000000003
     0.375
@@ -85,19 +86,17 @@ def binomial_distribution(successes: int, trials: int, prob: float) -> float:
     if not 0 < prob < 1:
         raise ValueError("prob has to be in range of 1 - 0")
     probability = (prob**successes) * ((1 - prob) ** (trials - successes))
-    # Calculate the binomial coefficient: n! / k!(n-k)!
     if probability > 0.0:
         try:
             return probability * comb(trials, successes)
         except OverflowError:
             pass
-    log_coeff = (
+    return exp(
         lgamma(trials + 1)
         - lgamma(successes + 1)
         - lgamma(trials - successes + 1)
-    )
-    return exp(
-        log_coeff + successes * log(prob) + (trials - successes) * log1p(-prob)
+        + successes * log(prob)
+        + (trials - successes) * log1p(-prob)
     )
 
 
@@ -144,5 +143,5 @@ Test passed.
 
 ```text
 .....                                                                    [100%]
-5 passed in 0.02s
+5 passed in 0.01s
 ```
