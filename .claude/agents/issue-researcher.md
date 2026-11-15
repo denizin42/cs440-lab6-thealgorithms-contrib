@@ -15,7 +15,7 @@
 # ==============================================================================
 name: issue-researcher
 description: Investigate open issues and existing algorithms in the codebase without clusttering the main context window.
-tools: Grep Read WebFetch
+tools: Grep, Read, WebFetch
 ---
 
 # Sub-Agent: `issue-researcher`

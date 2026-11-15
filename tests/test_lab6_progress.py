@@ -559,3 +559,62 @@ class TestPart7PerformanceTracker:
         assert "## [1.0.0]" in changelog_text, (
             "CHANGELOG.md must document Semantic Version [1.0.0] release"
         )
+
+
+class TestPart8HarnessDeduplicationAndConsistency:
+    """Verifies single-source config, skill-name consistency, and valid tool frontmatter."""
+
+    def test_part_8a_single_source_branch_name_consistency(self) -> None:
+        """Verify CLAUDE.md and mcp_server.py agree on the selected branch_name."""
+        claude_md = (REPO_ROOT / "CLAUDE.md").read_text(encoding="utf-8")
+        mcp_text = (REPO_ROOT / "mcp_server.py").read_text(encoding="utf-8")
+        assert "feature/fix_binomial_distribution" in claude_md
+        assert get_issue_brief_resource()["branch_name"] == "feature/fix_binomial_distribution"
+        assert "fix/issue-15656-binomial-overflow" not in mcp_text
+
+    def test_part_8b_consistent_contributing_skill_name(self) -> None:
+        """Verify CLAUDE.md and contributing-reviewer.md reference denizin42-contributing."""
+        claude_md = (REPO_ROOT / "CLAUDE.md").read_text(encoding="utf-8")
+        reviewer_md = (
+            REPO_ROOT / ".claude" / "agents" / "contributing-reviewer.md"
+        ).read_text(encoding="utf-8")
+        assert "thealgorithms-contributing" not in claude_md
+        assert "thealgorithms-contributing" not in reviewer_md
+        assert "denizin42-contributing" in claude_md
+        assert "skills: denizin42-contributing" in reviewer_md
+
+    def test_part_8c_valid_claude_frontmatter_tools(self) -> None:
+        """Verify agents and skills use valid comma-separated Claude tool names."""
+        files = [
+            REPO_ROOT / ".claude" / "agents" / "contributing-reviewer.md",
+            REPO_ROOT / ".claude" / "agents" / "issue-researcher.md",
+            REPO_ROOT / ".claude" / "skills" / "denizin42-contributing" / "SKILL.md",
+            REPO_ROOT / ".claude" / "skills" / "fork-pr-workflow" / "SKILL.md",
+        ]
+        for path in files:
+            lines = path.read_text(encoding="utf-8").splitlines()
+            tool_lines = [
+                line
+                for line in lines
+                if line.startswith("tools:") or line.startswith("allowed-tools:")
+            ]
+            assert tool_lines, f"Missing tools/allowed-tools in {path.name}"
+            for line in tool_lines:
+                value = line.split(":", 1)[1].strip()
+                assert "," in value, f"Use comma-separated tool names in {path.name}: {line}"
+                for bad in ("python", "python3", "gh", "git"):
+                    assert bad not in value.split(), (
+                        f"Use 'Bash' instead of CLI binary '{bad}' in {path.name}: {line}"
+                    )
+
+    def test_part_8d_context_and_skills_stay_generic(self) -> None:
+        """Verify context rules and contributing skill avoid hardcoding the target file."""
+        for rel in (
+            "context/contributing-rules.md",
+            "context/fork-pr-workflow.md",
+            ".claude/skills/denizin42-contributing/SKILL.md",
+        ):
+            text = (REPO_ROOT / rel).read_text(encoding="utf-8")
+            assert "maths/binomial_distribution.py" not in text, (
+                f"Keep target_file centralized in CLAUDE.md/mcp_server.py, not {rel}"
+            )
