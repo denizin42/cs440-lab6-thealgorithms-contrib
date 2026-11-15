@@ -1,9 +1,11 @@
 .PHONY: help install test lint compliance mcp-check demo-dry-run benchmark cleanup-fork reset
 
 PYTHON ?= python3
+AGENT ?= auto
 VERSION ?= v_next
 LABEL ?= Harness Benchmark Run
 CHANGE ?= Latest harness update
+PROMPT ?= Follow CLAUDE.md Phase 2 Deliverables efficiently (do not re-read @./context/*.md files already imported): (1) Ensure personal fork denizin42/Python exists (gh repo fork TheAlgorithms/Python --clone=false if missing), (2) invoke issue-researcher and contributing-reviewer in parallel using a fast model (haiku/flash) on maths/binomial_distribution.py and src/, (3) open a fork-only PR on denizin42/Python via DRY_RUN=false bash scripts/fork-and-submit-pr.sh, and (4) run pytest -q --tb=short and doctest once at the end. Name both subagents invoked.
 
 help: ## Show available Lab 6 commands for Professor & TA
 	@grep -E '^[a-zA-Z0-9_-]+:.*?## .*$$' $(MAKEFILE_LIST) | \
@@ -30,13 +32,29 @@ mcp-check: ## Verify the local FastMCP server resource & target validator
 demo-dry-run: ## Dry-run the fork-only PR submission script (no GitHub push/PR)
 	DRY_RUN=true bash scripts/fork-and-submit-pr.sh
 
-benchmark: ## Run agy agent benchmark with JSON telemetry, update PERFORMANCE_REPORT.md, and clean fork
+benchmark: ## Run coding agent benchmark (AGENT=auto|claude|agy or custom AGENT_CMD), update PERFORMANCE_REPORT.md, and clean fork
+	@CMD="$(AGENT_CMD)"; \
+	if [ -z "$$CMD" ]; then \
+		SEL="$(AGENT)"; \
+		if [ "$$SEL" = "auto" ]; then \
+			if command -v claude >/dev/null 2>&1; then SEL="claude"; \
+			elif command -v agy >/dev/null 2>&1; then SEL="agy"; \
+			else echo "ERROR: neither 'claude' nor 'agy' found in PATH (pass AGENT_CMD=...)." >&2; exit 1; fi; \
+		fi; \
+		if [ "$$SEL" = "claude" ]; then \
+			CMD="claude --output-format stream-json --verbose --dangerously-skip-permissions -p '$(PROMPT)'"; \
+		elif [ "$$SEL" = "agy" ]; then \
+			CMD="agy --effort medium --output-format stream-json --dangerously-skip-permissions -p '$(PROMPT)'"; \
+		else \
+			CMD="$$SEL '$(PROMPT)'"; \
+		fi; \
+	fi; \
 	$(PYTHON) scripts/track_performance.py \
 		--version "$(VERSION)" \
 		--label "$(LABEL)" \
 		--change "$(CHANGE)" \
 		--fork-overhead-sec 4.5 \
-		--agent-cmd "agy --effort medium --output-format stream-json --dangerously-skip-permissions -p 'Follow CLAUDE.md Phase 2 Deliverables efficiently (do not re-read @./context/*.md files already imported): (1) Ensure personal fork denizin42/Python exists (gh repo fork TheAlgorithms/Python --clone=false if missing), (2) invoke issue-researcher and contributing-reviewer in parallel using Model=\"flash\" on maths/binomial_distribution.py and src/, (3) open a fork-only PR on denizin42/Python via DRY_RUN=false bash scripts/fork-and-submit-pr.sh, and (4) run pytest -q --tb=short and doctest once at the end. Name both subagents invoked.'"
+		--agent-cmd "$$CMD"
 	bash scripts/cleanup-fork.sh
 
 cleanup-fork: ## Close test PRs and prune feature branches on denizin42/Python

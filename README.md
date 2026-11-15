@@ -31,10 +31,16 @@ make demo-dry-run
 
 ### Running a Live Agent Benchmark & Fork Cleanup
 
-To execute the Phase 2 coding agent (`agy`), record wall-clock speed, token usage, sub-agent invocation (`issue-researcher`, `contributing-reviewer`), and changelog notes in [`PERFORMANCE_REPORT.md`](./PERFORMANCE_REPORT.md) + `logs/harness_performance.db`, and automatically clean up `denizin42/Python` afterward:
+`make benchmark` is **agent-agnostic** (`AGENT=auto` detects `claude` or `agy`, or pass `AGENT=claude`, `AGENT=agy`, or a custom `AGENT_CMD="..."`). It records wall-clock speed, token usage, sub-agent invocation (`issue-researcher`, `contributing-reviewer`), and changelog notes in [`PERFORMANCE_REPORT.md`](./PERFORMANCE_REPORT.md) + `logs/harness_performance.db`, and automatically cleans up `denizin42/Python` afterward:
 
 ```bash
-make benchmark VERSION=v3 LABEL="Post-Cleanup Run" CHANGE="Describe harness/prompt change"
+# Auto-detect Claude Code or Antigravity (agy)
+make benchmark VERSION=v6 LABEL="Benchmark Run" CHANGE="Describe harness/prompt change"
+
+# Explicitly target Claude Code, Antigravity, or a custom agent CLI
+make benchmark AGENT=claude VERSION=v6 LABEL="Claude Code Run"
+make benchmark AGENT=agy VERSION=v6 LABEL="AGY Run"
+make benchmark AGENT_CMD="my-agent -p 'Follow CLAUDE.md'" VERSION=v6
 ```
 
 To manually close test PRs and prune feature branches on `denizin42/Python` at any time:
