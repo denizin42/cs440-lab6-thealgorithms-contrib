@@ -24,6 +24,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Prune intermediate benchmark runs `v2`–`v10` from `logs/harness_performance.db` and `PERFORMANCE_REPORT.md`, keeping `v1` baseline (`245.475s`) and `v11` latest (`83.822s`, `-65.9%`)
 - Make `Makefile` (`AGENT=auto|claude|agy` and `AGENT_CMD`), `scripts/track_performance.py` (Claude Code + `agy` `stream-json` parsing), `CLAUDE.md`, and `README.md` agent-agnostic
 - Strip Phase 1 `# HINTS:` blocks from `.claude/agents/*.md` and `SKILL.md`, route sub-agents to `flash`/`haiku` in parallel, pass `--effort medium` in `Makefile`, and record `v5` (`130.619s`, `38,084` tokens, `-48.5%` tokens vs `v4`) in `PERFORMANCE_REPORT.md`
 - Upgrade console streaming output in `scripts/track_performance.py` and `scripts/cleanup-fork.sh` with step emojis, tool/parameter summaries, and real-time sub-agent transcript tailing

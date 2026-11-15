@@ -1,6 +1,6 @@
 # CS 440 Lab 6 — Agent Algorithm-Fix Performance Report
 
-SQLite Database: `harness_performance.db` | Total Runs: **11** | Baseline: **`v1`** (v1 Agent Fix Run)
+SQLite Database: `harness_performance.db` | Total Runs: **2** | Baseline: **`v1`** (v1 Agent Fix Run)
 
 ---
 
@@ -21,10 +21,10 @@ SQLite Database: `harness_performance.db` | Total Runs: **11** | Baseline: **`v1
 ```mermaid
 xychart-beta
     title "Agent Fix Duration (s) Across Harness Versions"
-    x-axis ["v2", "v3", "v4", "v5", "v6", "v7", "v8", "v9", "v10", "v11"]
-    y-axis "Agent Fix Duration (s)" 0 --> 260.27
-    bar [45.724, 194.199, 208.213, 130.619, 109.192, 129.762, 98.587, 108.264, 110.805, 83.822]
-    line [45.724, 194.199, 208.213, 130.619, 109.192, 129.762, 98.587, 108.264, 110.805, 83.822]
+    x-axis ["v1", "v11"]
+    y-axis "Agent Fix Duration (s)" 0 --> 306.84
+    bar [245.475, 83.822]
+    line [245.475, 83.822]
 ```
 
 ---
@@ -34,15 +34,6 @@ xychart-beta
 | Run | Version | Change / Tuning | Duration | Delta vs. `v1` | Tokens | Sub-Agents | Verification |
 | :---: | :--- | :--- | :---: | :---: | :---: | :--- | :--- |
 | 1 | `v1` **(Baseline)** | v1 Agent Fix Run | `245.475s` (`+4.5s` fork) | `0.0 s (0.0%)` | `n/a` | `unknown` | RESOLVED (7 doctests) |
-| 2 | `v2` | v2 Fork-First + Live Console | `45.724s` (cold fork) | `-199.7511 s (-81.4%)` | `n/a` | `unknown` | RESOLVED (7 doctests) |
-| 3 | `v3` | Deduplicated target config/frontmatter, added Makefile, fork cleanup, and detailed stream-json token/subagent telemetry | `194.199s` (`+4.5s` fork) | `-51.2753 s (-20.9%)` | `53,210` | `issue-researcher, contributing-reviewer` | RESOLVED (7 doctests) |
-| 4 | `v4` | Added emoji & live sub-agent transcript streaming | `208.213s` (`+4.5s` fork) | `-37.2613 s (-15.2%)` | `73,886` | `issue-researcher, contributing-reviewer` | RESOLVED (7 doctests) |
-| 5 | `v5` | Stripped Phase 1 hints, routed subagents to flash in parallel, set --effort medium, and avoided redundant context re-reads | `130.619s` (`+4.5s` fork) | `-114.8559 s (-46.8%)` | `38,084` | `issue-researcher, contributing-reviewer` | RESOLVED (7 doctests) |
-| 6 | `v6` | Added fast_audit.py skill script, get_issue_root_cause_context & run_fast_compliance_audit MCP tools, and scoped subagents strictly to local repo | `109.192s` (`+4.5s` fork) | `-136.2823 s (-55.5%)` | `41,929` | `issue-researcher, contributing-reviewer` | RESOLVED (7 doctests) |
-| 7 | `v7` | Added Main vs Sub-Agent duration/token breakdown and Issue #15656 code snippet + live test proof to PERFORMANCE_REPORT.md | `129.762s` (`+4.5s` fork) | `-115.7121 s (-47.1%)` | `44,668` | `issue-researcher, contributing-reviewer` | RESOLVED (7 doctests) |
-| 8 | `v8` | Reset maths/binomial_distribution.py to buggy Issue #15656 before timed agent run and invoke MCP tools | `98.587s` (`+4.5s` fork) | `-146.8881 s (-59.8%)` | `51,727` | `issue-researcher, contributing-reviewer` | RESOLVED (7 doctests) |
-| 9 | `v9` | Added context/phase2-fastpath.md, MCP get_phase2_fastpath_bundle, flash_lite subagents, and single-pass post-edit review | `108.264s` (`+4.5s` fork) | `-137.2105 s (-55.9%)` | `57,224` | `issue-researcher, contributing-reviewer` | RESOLVED (4 doctests) |
-| 10 | `v10` | Auto-fix ruff in fast_audit.py, edit in parallel with issue-researcher, and run fast test_src_workflow.py | `110.805s` (`+4.5s` fork) | `-134.6694 s (-54.9%)` | `60,782` | `issue-researcher, contributing-reviewer` | RESOLVED (4 doctests) |
 | 12 | `v11` | Removed solution hints from PROMPT/phase2-fastpath.md and added concise error details to fast_audit.py | `83.822s` (`+4.5s` fork) | `-161.6522 s (-65.9%)` | `57,647` | `issue-researcher, contributing-reviewer` | RESOLVED (4 doctests) |
 
 ---
@@ -138,5 +129,5 @@ Test passed.
 
 ```text
 .....                                                                    [100%]
-5 passed in 0.01s
+5 passed in 0.02s
 ```
