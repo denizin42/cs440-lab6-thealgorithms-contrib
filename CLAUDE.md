@@ -32,6 +32,7 @@ To avoid **Context Bloat** (Context Engineering Lecture Slide 15), `CLAUDE.md` s
 2. **Diagnose & Fix Issue `#15656`**: Research `maths/binomial_distribution.py` via `issue-researcher`, fix the `float(factorial(trials))` overflow for large `trials` (`n >= 171`), and add `doctest` regression tests.
 3. **Generate & Audit `src/`**: Build/verify the Python workflow package in `src/` (AST-based `CONTRIBUTING.md` compliance checker, fork-target validator, and PR template builder), audit via MCP (`verify_contribution_target`) and `contributing-reviewer`, and publish `CONTRIBUTION_REPORT.md`.
 4. **Open Fork-Only PR**: Run `DRY_RUN=false bash scripts/fork-and-submit-pr.sh` to push the fixed algorithm to `denizin42/Python` and open the Pull Request inside your personal fork.
+5. **Token & Latency Discipline**: Do **not** re-read `@./context/*.md` files already imported below; invoke `issue-researcher` and `contributing-reviewer` with `Model="flash"` (in parallel when independent); run `pytest -q --tb=short` once at the end.
 
 ---
 

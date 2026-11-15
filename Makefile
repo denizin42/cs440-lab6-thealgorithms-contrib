@@ -36,7 +36,7 @@ benchmark: ## Run agy agent benchmark with JSON telemetry, update PERFORMANCE_RE
 		--label "$(LABEL)" \
 		--change "$(CHANGE)" \
 		--fork-overhead-sec 4.5 \
-		--agent-cmd "agy --output-format stream-json --dangerously-skip-permissions -p 'Follow CLAUDE.md Phase 2 Deliverables strictly: (1) First fork TheAlgorithms/Python to denizin42/Python using gh repo fork TheAlgorithms/Python --clone=false if not already forked, (2) invoke issue-researcher on Issue #15656 in maths/binomial_distribution.py and verify/fix the overflow following CONTRIBUTING.md, (3) invoke contributing-reviewer to audit maths/binomial_distribution.py and src/, (4) open a fork-only PR on denizin42/Python using DRY_RUN=false bash scripts/fork-and-submit-pr.sh, and (5) verify pytest and doctests pass. Explicitly name both subagents you invoked in your summary.'"
+		--agent-cmd "agy --effort medium --output-format stream-json --dangerously-skip-permissions -p 'Follow CLAUDE.md Phase 2 Deliverables efficiently (do not re-read @./context/*.md files already imported): (1) Ensure personal fork denizin42/Python exists (gh repo fork TheAlgorithms/Python --clone=false if missing), (2) invoke issue-researcher and contributing-reviewer in parallel using Model=\"flash\" on maths/binomial_distribution.py and src/, (3) open a fork-only PR on denizin42/Python via DRY_RUN=false bash scripts/fork-and-submit-pr.sh, and (4) run pytest -q --tb=short and doctest once at the end. Name both subagents invoked.'"
 	bash scripts/cleanup-fork.sh
 
 cleanup-fork: ## Close test PRs and prune feature branches on denizin42/Python
