@@ -135,19 +135,7 @@ def verify_contribution_target(
         description="Feature branch name (never main or master)",
     ),
 ) -> str:
-    """Validate that the contribution target obeys upstream isolation and `CONTRIBUTING.md`.
-
-    ===========================================================================
-    TODO (Part 5A - MCP Tool Implementation):
-    Validate the 4 arguments before the agent begins modifying files or pushing:
-      - `issue_number` must be a positive integer
-      - `fork_owner` must be a non-empty string and MUST NOT be `"thealgorithms"`
-        (case-insensitive) so the agent never targets the upstream repository
-      - `branch_name` must be a non-empty string and MUST NOT be `"main"` or `"master"`
-      - `target_file` must exist under `PROJECT_ROOT` and end with `.py`
-    If all checks pass, return a confirmation string; otherwise raise `ValueError`.
-    ===========================================================================
-    """
+    """Validate that the contribution target obeys upstream isolation and `CONTRIBUTING.md`."""
     if issue_number <= 0:
         raise ValueError("issue_number must be a positive integer.")
     if not fork_owner.strip() or "thealgorithms" in fork_owner.strip().lower():
@@ -176,17 +164,7 @@ def list_context_docs() -> list[str]:
 
 @mcp.resource("thealgorithms://issue-brief", mime_type="application/json")
 def get_issue_brief_resource() -> dict[str, Any]:
-    """Direct resource exposing your selected issue and fork target as a dictionary.
-
-    ===========================================================================
-    TODO (Part 5B - MCP Resource Implementation):
-    Return a dictionary matching the 4 settings you selected in `CLAUDE.md`:
-      - `"issue_number"`
-      - `"target_file"`
-      - `"fork_owner"`
-      - `"branch_name"`
-    ===========================================================================
-    """
+    """Direct resource exposing your selected issue and fork target as a dictionary."""
     issue_brief = {
         "issue_number": "15656",
         "target_file": "maths/binomial_distribution.py",
@@ -213,16 +191,7 @@ def audit_contribution_prompt(
         description="Relative path to the target algorithm file",
     ),
 ) -> str:
-    """Reusable prompt template triggered via `/audit_contribution`.
-
-    ===========================================================================
-    TODO (Part 5C - MCP Prompt Implementation):
-    Return a prompt string instructing the agent to:
-      - Call `verify_contribution_target` to confirm upstream isolation
-      - Fix the issue in `target_file` following `CONTRIBUTING.md`
-      - Generate the fork/PR and compliance workflow in `src/`
-    ===========================================================================
-    """
+    """Reusable prompt template triggered via `/audit_contribution`."""
     return (
         f"Call `verify_contribution_target` on {target_file} to confirm upstream "
         f"isolation. Fix the issue in {target_file} following `CONTRIBUTING.md`. "

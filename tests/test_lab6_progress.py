@@ -91,6 +91,7 @@ class TestPart2HooksAndMemory:
             "TODO Part 2D: Write Project Memory & Context Routing in Section 2 of CLAUDE.md"
         )
         assert "src/" in claude_md
+        assert "fork-and-submit-pr.sh" in claude_md
 
     def test_part_2e_contributing_rules_context_file(self) -> None:
         """Verify `context/contributing-rules.md` is authored and symlinked into `.claude/`."""
@@ -372,6 +373,44 @@ class TestPart6UpstreamGuardAndPRBuilder:
         assert "Fixes #15656" in body
         assert "[x]" in body.lower()
         assert "CONTRIBUTING.md" in body
+
+    def test_part_6c_fork_and_submit_pr_script(self) -> None:
+        """Verify `scripts/fork-and-submit-pr.sh` dry-run passes and blocks upstream."""
+        script_path = REPO_ROOT / "scripts" / "fork-and-submit-pr.sh"
+        script_text = script_path.read_text(encoding="utf-8")
+        assert "TODO" not in script_text
+
+        blocked = subprocess.run(
+            ["bash", str(script_path)],
+            cwd=str(REPO_ROOT),
+            env={
+                "PATH": "/usr/bin:/bin:/usr/local/bin:/opt/homebrew/bin",
+                "FORK_OWNER": "TheAlgorithms",
+            },
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        assert blocked.returncode != 0
+
+        dry_run = subprocess.run(
+            ["bash", str(script_path)],
+            cwd=str(REPO_ROOT),
+            env={
+                "PATH": (
+                    f"{Path(sys.executable).parent}:"
+                    "/usr/bin:/bin:/usr/local/bin:/opt/homebrew/bin"
+                ),
+                "DRY_RUN": "true",
+            },
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        assert dry_run.returncode == 0, (
+            f"fork-and-submit-pr.sh failed: {dry_run.stderr or dry_run.stdout}"
+        )
+        assert "denizin42/Python" in dry_run.stdout
 
 
 class TestPart7PerformanceTracker:

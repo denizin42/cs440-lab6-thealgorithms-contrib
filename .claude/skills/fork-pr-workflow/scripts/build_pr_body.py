@@ -22,32 +22,20 @@ TEMPLATE_PATH = REPO_ROOT / ".github" / "pull_request_template.md"
 def build_pr_body(issue_number: int, target_file: str, summary: str) -> str:
     """Render `.github/pull_request_template.md` for a single-file bugfix PR."""
     template = TEMPLATE_PATH.read_text(encoding="utf-8")
-
-    # Mark the bugfix item and all compliance checklist items as [x]
-    rendered_lines: list[str] = []
-    in_checklist = False
-    for line in template.splitlines():
-        if line.startswith("### Checklist"):
-            in_checklist = True
-            rendered_lines.append(line)
-            continue
-
-        if line == "### Describe your change":
-            rendered_lines.append(line)
-            rendered_lines.append("")
-            rendered_lines.append(
-                f"Fixes #{issue_number} in `{target_file}`: {summary}."
-            )
-            continue
-
-        if line.startswith("* [ ] Fix a bug or typo"):
-            rendered_lines.append(line.replace("* [ ]", "* [x]", 1))
-        elif in_checklist and line.startswith("* [ ] "):
-            rendered_lines.append(line.replace("* [ ]", "* [x]", 1))
-        else:
-            rendered_lines.append(line)
-
-    return "\n".join(rendered_lines) + "\n"
+    sections = template.split("### Checklist", maxsplit=1)
+    header_part = sections[0].replace(
+        "### Describe your change",
+        f"### Describe your change\n\nFixes #{issue_number} in `{target_file}`: {summary}.",
+        1,
+    ).replace(
+        "* [ ] Fix a bug or typo",
+        "* [x] Fix a bug or typo",
+        1,
+    )
+    checklist_part = (
+        sections[1].replace("* [ ] ", "* [x] ") if len(sections) > 1 else ""
+    )
+    return f"{header_part}### Checklist{checklist_part}\n"
 
 
 def main() -> int:

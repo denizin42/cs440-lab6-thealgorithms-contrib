@@ -27,20 +27,9 @@ fi
 
 touch "$CLAUDE_MD"
 
-# ==============================================================================
-# TODO (Part 2B - Idempotent Context Injection, Context Engineering Slides 24–25):
-# Implement `add_context()` so it appends `$context_ref` to `$CLAUDE_MD` ONLY if
-# that exact line is not already present in `$CLAUDE_MD`.
-#
-# HINTS:
-# - What happens to the context window (Components of a Coding Agent, Slide 15)
-#   if every prompt blindly runs `echo "$context_ref" >> "$CLAUDE_MD"`?
-# - Which `grep` flags check for an exact, fixed-string, whole-line match
-#   quietly without printing output?
-# ==============================================================================
+# --- Idempotent Context Injection Helper ---
 add_context() {
     local context_ref="$1"
-    # TODO (Part 2B): Implement idempotent check-then-append into "$CLAUDE_MD"
     grep -qxF "$context_ref" "$CLAUDE_MD" 2>/dev/null || echo "$context_ref" >> "$CLAUDE_MD"
 }
 
