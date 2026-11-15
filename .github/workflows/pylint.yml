@@ -1,6 +1,11 @@
-name: Pylint & CONTRIBUTING.md Checks
+name: Pylint, Pytest & CONTRIBUTING.md Checks
 
-on: [push, pull_request]
+on:
+  push:
+    branches: ["main", "feature/**"]
+    tags: ["v*"]
+  pull_request:
+    branches: ["main"]
 
 jobs:
   build:
@@ -17,10 +22,13 @@ jobs:
     - name: Install dependencies
       run: |
         python -m pip install --upgrade pip
-        pip install pylint pytest ruff
+        pip install -r requirements.txt
+    - name: Run Harness & TDD Unit Tests (pytest)
+      run: |
+        pytest -v --tb=short
     - name: Analysing the code with pylint
       run: |
-        pylint $(git ls-files '*.py')
+        python -m pylint --reports=n --score=y $(git ls-files '*.py')
     - name: Running doctests on target algorithms
       run: |
         python -m doctest -v maths/binomial_distribution.py

@@ -14,74 +14,77 @@ Exposes the three MCP building blocks to guide the AI agent on `TheAlgorithms/Py
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any, Callable, Dict
+from typing import Any, Dict
+from mcp.server.mcpserver import MCPServer
+from pydantic import Field
 
-try:
-    from mcp.server.fastmcp import FastMCP
-    from pydantic import Field
-except ImportError:
-    def Field(  # pylint: disable=invalid-name,unused-argument
-        default: Any = ..., **kwargs: Any
-    ) -> Any:  # type: ignore[misc]
-        """Fallback Field helper matching pydantic.Field signature."""
-        return default if default is not ... else None
 
-    class FastMCP:  # type: ignore[no-redef]
-        """Minimal decorator-compatible FastMCP fallback for local unit testing."""
+# try:
+#     from pydantic import Field
+# except ImportError:
+#     def Field(  # pylint: disable=invalid-name,unused-argument
+#         default: Any = ..., **kwargs: Any
+#     ) -> Any:  # type: ignore[misc]
+#         """Fallback Field helper matching pydantic.Field signature."""
+#         return default if default is not ... else None
 
-        def __init__(self, name: str, log_level: str = "ERROR") -> None:
-            self.name = name
-            self.log_level = log_level
-            self.tools: Dict[str, Callable[..., Any]] = {}
-            self.resources: Dict[str, Callable[..., Any]] = {}
-            self.prompts: Dict[str, Callable[..., Any]] = {}
+    # class FastMCP:  # type: ignore[no-redef]
+    #     """Minimal decorator-compatible FastMCP fallback for local unit testing."""
 
-        def tool(
-            self,
-            name: str | None = None,
-            description: str = "",  # pylint: disable=unused-argument
-        ) -> Callable[..., Any]:
-            """Register an MCP tool function."""
-            def decorator(func: Callable[..., Any]) -> Callable[..., Any]:
-                tool_name = name or func.__name__
-                self.tools[tool_name] = func
-                return func
+    #     def __init__(self, name: str, log_level: str = "ERROR") -> None:
+    #         self.name = name
+    #         self.log_level = log_level
+    #         self.tools: Dict[str, Callable[..., Any]] = {}
+    #         self.resources: Dict[str, Callable[..., Any]] = {}
+    #         self.prompts: Dict[str, Callable[..., Any]] = {}
 
-            return decorator
+    #     def tool(
+    #         self,
+    #         name: str | None = None,
+    #         description: str = "",  # pylint: disable=unused-argument
+    #     ) -> Callable[..., Any]:
+    #         """Register an MCP tool function."""
+    #         def decorator(func: Callable[..., Any]) -> Callable[..., Any]:
+    #             tool_name = name or func.__name__
+    #             self.tools[tool_name] = func
+    #             return func
 
-        def resource(
-            self,
-            uri: str,
-            mime_type: str = "text/plain",  # pylint: disable=unused-argument
-        ) -> Callable[..., Any]:
-            """Register an MCP resource handler."""
-            def decorator(func: Callable[..., Any]) -> Callable[..., Any]:
-                self.resources[uri] = func
-                return func
+    #         return decorator
 
-            return decorator
+    #     def resource(
+    #         self,
+    #         uri: str,
+    #         mime_type: str = "text/plain",  # pylint: disable=unused-argument
+    #     ) -> Callable[..., Any]:
+    #         """Register an MCP resource handler."""
+    #         def decorator(func: Callable[..., Any]) -> Callable[..., Any]:
+    #             self.resources[uri] = func
+    #             return func
 
-        def prompt(
-            self,
-            name: str | None = None,
-            description: str = "",  # pylint: disable=unused-argument
-        ) -> Callable[..., Any]:
-            """Register an MCP prompt template."""
-            def decorator(func: Callable[..., Any]) -> Callable[..., Any]:
-                prompt_name = name or func.__name__
-                self.prompts[prompt_name] = func
-                return func
+    #         return decorator
 
-            return decorator
+    #     def prompt(
+    #         self,
+    #         name: str | None = None,
+    #         description: str = "",  # pylint: disable=unused-argument
+    #     ) -> Callable[..., Any]:
+    #         """Register an MCP prompt template."""
+    #         def decorator(func: Callable[..., Any]) -> Callable[..., Any]:
+    #             prompt_name = name or func.__name__
+    #             self.prompts[prompt_name] = func
+    #             return func
 
-        def run(self) -> None:
-            """Start the MCP server."""
-            print(
-                f"[{self.name}] MCP server initialized with {len(self.tools)} tools, "
-                f"{len(self.resources)} resources, and {len(self.prompts)} prompts."
-            )
+    #         return decorator
 
-mcp = FastMCP("TheAlgorithmsContribMCP", log_level="ERROR")
+    #     def run(self) -> None:
+    #         """Start the MCP server."""
+    #         print(
+    #             f"[{self.name}] MCP server initialized with {len(self.tools)} tools, "
+    #             f"{len(self.resources)} resources, and {len(self.prompts)} prompts."
+    #         )
+
+# mcp = FastMCP("TheAlgorithmsContribMCP", log_level="ERROR")
+mcp = MCPServer("TheAlgorithmsContribMCP", log_level="ERROR")
 
 PROJECT_ROOT = Path(__file__).resolve().parent
 CONTEXT_DOCS: Dict[str, Path] = {
@@ -145,14 +148,19 @@ def verify_contribution_target(
     If all checks pass, return a confirmation string; otherwise raise `ValueError`.
     ===========================================================================
     """
-    _ = (issue_number, target_file, fork_owner, branch_name)
-    if issue_number < 0:
-        raise ValueError("Issue number cannot be negative")
-    if fork_owner == "" or "thealgorithms" in fork_owner:
-        raise ValueError("Owner cannot be empty or thealgorithms")
-    if branch_name == "" or "main|master" in branch_name:
-        raise ValueError("Cannot commit directly to master or main")
-    return "Positive Validation"
+    if issue_number <= 0:
+        raise ValueError("issue_number must be a positive integer.")
+    if not fork_owner.strip() or "thealgorithms" in fork_owner.strip().lower():
+        raise ValueError("fork_owner cannot be empty or target TheAlgorithms.")
+    if not branch_name.strip() or branch_name.strip().lower() in ("main", "master"):
+        raise ValueError("branch_name cannot be empty, 'main', or 'master'.")
+    target_path = PROJECT_ROOT / target_file
+    if not target_file.endswith(".py") or not target_path.is_file():
+        raise ValueError(f"target_file '{target_file}' must be an existing .py file.")
+    return (
+        f"Verified target: issue=#{issue_number}, file={target_file}, "
+        f"fork={fork_owner}, branch={branch_name}"
+    )
 
 
 # ==============================================================================
@@ -167,7 +175,7 @@ def list_context_docs() -> list[str]:
 
 
 @mcp.resource("thealgorithms://issue-brief", mime_type="application/json")
-def get_issue_brief_resource() -> Dict[str, Any]:
+def get_issue_brief_resource() -> dict[str, Any]:
     """Direct resource exposing your selected issue and fork target as a dictionary.
 
     ===========================================================================
@@ -179,10 +187,13 @@ def get_issue_brief_resource() -> Dict[str, Any]:
       - `"branch_name"`
     ===========================================================================
     """
-    # TODO (Part 5B): Return the dictionary of selected contribution settings
-    raise NotImplementedError(
-        "TODO (Part 5B): Implement `get_issue_brief_resource` in `mcp_server.py`."
-    )
+    issue_brief = {
+        "issue_number": "15656",
+        "target_file": "maths/binomial_distribution.py",
+        "fork_owner": "denizin42",
+        "branch_name": "feature/fix_binomial_distribution",
+    }
+    return issue_brief
 
 
 # ==============================================================================
@@ -212,12 +223,11 @@ def audit_contribution_prompt(
       - Generate the fork/PR and compliance workflow in `src/`
     ===========================================================================
     """
-    _ = target_file
-    # TODO (Part 5C): Implement the reusable MCP prompt string
-    raise NotImplementedError(
-        "TODO (Part 5C): Implement `audit_contribution_prompt` in `mcp_server.py`."
+    return (
+        f"Call `verify_contribution_target` on {target_file} to confirm upstream "
+        f"isolation. Fix the issue in {target_file} following `CONTRIBUTING.md`. "
+        "Generate the fork/PR and compliance workflow in `src/`."
     )
-
 
 if __name__ == "__main__":
     mcp.run()
