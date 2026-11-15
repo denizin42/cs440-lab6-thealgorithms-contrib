@@ -23,6 +23,7 @@ import importlib.util
 import json
 from pathlib import Path
 import re
+import selectors
 import sqlite3
 import subprocess
 import sys
@@ -280,17 +281,41 @@ def _detect_subagents(response_text: str, conversation_id: str) -> str:
     return ", ".join(found) if found else "none detected"
 
 
+_TOOL_ICONS = {
+    "read_file": "📖",
+    "view_file": "📖",
+    "edit_file": "✏️",
+    "replace_file_content": "✏️",
+    "write_file": "📝",
+    "write_to_file": "📝",
+    "run_command": "💻",
+    "grep_search": "🔍",
+    "find_by_name": "🔍",
+    "list_dir": "📂",
+    "define_subagent": "🛠️",
+    "invoke_subagent": "🤖",
+    "call_mcp_tool": "🔌",
+    "read_resource": "🔌",
+}
+
+
 def _summarize_tool_params(params: Dict[str, Any]) -> str:
     """Return a concise one-line summary of tool/subagent parameters."""
-    for key in ("CommandLine", "Path", "TypeName", "Role", "ToolName", "Query", "Pattern"):
+    if params.get("TypeName") or params.get("Role"):
+        tname = params.get("TypeName", "subagent")
+        role = params.get("Role", "")
+        return f"{tname}" + (f" ({role})" if role else "")
+    for key in ("CommandLine", "Path", "ToolName", "Query", "Pattern"):
         if params.get(key):
             val = str(params[key]).replace("\n", " ").strip()
+            if key == "Path":
+                val = Path(val).name if len(val) > 65 else val
             return val[:90] + ("..." if len(val) > 90 else "")
     return ""
 
 
 def _format_step_update(upd: Dict[str, Any], elapsed: float) -> Optional[str]:
-    """Format a stream-json `step_update` into a detailed live console line."""
+    """Format a stream-json `step_update` into an emoji-rich live console line."""
     state = upd.get("state", "")
     stype = upd.get("step_type", "step")
     idx = upd.get("step_index", "?")
@@ -300,19 +325,66 @@ def _format_step_update(upd: Dict[str, Any], elapsed: float) -> Optional[str]:
     tname = upd.get("tool_name") or info.get("name") or stype
     if state == "ACTIVE" and stype in ("tool", "subagent"):
         detail = _summarize_tool_params(info.get("parameters") or {})
-        suffix = f": {detail}" if detail else ""
-        return f"      [+{elapsed:5.1f}s] [agy] -> #{idx} {tname}{suffix}"
+        suffix = f" -> {detail}" if detail else ""
+        return f"      [+{elapsed:5.1f}s] {_TOOL_ICONS.get(tname, '⚙️')} #{idx} {tname}{suffix}"
     if state in ("DONE", "ERROR"):
         dur = upd.get("duration_seconds")
         dur_str = f" ({dur:.2f}s)" if isinstance(dur, (int, float)) else ""
-        err = (info.get("error") or {}).get("message", "")
-        err_str = f" ERROR: {err[:70]}" if err else ""
         if stype == "agent_response":
             tok = (upd.get("usage") or {}).get("total_tokens", 0)
-            tok_str = f" [tokens={tok:,}]" if tok else ""
-            return f"      [+{elapsed:5.1f}s] [agy] <- #{idx} response {state}{dur_str}{tok_str}"
-        return f"      [+{elapsed:5.1f}s] [agy] <- #{idx} {tname} {state}{dur_str}{err_str}"
+            tok_str = f", {tok:,} tokens" if tok else ""
+            return f"      [+{elapsed:5.1f}s] 🧠 #{idx} Agent planned/responded{dur_str}{tok_str}"
+        if stype == "system_message":
+            return f"      [+{elapsed:5.1f}s] 📬 #{idx} Sub-agent finished & woke orchestrator"
+        err = (info.get("error") or {}).get("message", "")
+        badge = "❌" if state == "ERROR" else "✅"
+        return (
+            f"      [+{elapsed:5.1f}s] {badge} #{idx} {tname} {state.lower()}{dur_str}"
+            + (f" | {err[:70]}" if err else "")
+        )
     return None
+
+
+def _poll_subagent_transcripts(
+    start_epoch: float,
+    start_ns: int,
+    main_conv_id: str,
+    seen_lines: Dict[str, int],
+) -> None:
+    """Stream new tool calls from active sub-agent transcripts in real time."""
+    elapsed = (time.perf_counter_ns() - start_ns) / 1_000_000_000.0
+    for base in (
+        Path.home() / ".gemini-personal" / ".gemini" / "antigravity-cli" / "brain",
+        Path.home() / ".gemini" / "antigravity-cli" / "brain",
+    ):
+        if not base.exists():
+            continue
+        for tpath in base.glob("*/.system_generated/logs/transcript.jsonl"):
+            conv_id = tpath.parent.parent.parent.name
+            if conv_id == main_conv_id or tpath.stat().st_mtime < start_epoch:
+                continue
+            lines = tpath.read_text(encoding="utf-8", errors="ignore").splitlines()
+            prev = seen_lines.get(conv_id, 0)
+            for raw in lines[prev:]:
+                _print_subagent_step(raw, conv_id[:8], elapsed)
+            seen_lines[conv_id] = len(lines)
+
+
+def _print_subagent_step(raw_json: str, short_id: str, elapsed: float) -> None:
+    """Print one sub-agent tool call from a transcript JSONL line."""
+    try:
+        step = json.loads(raw_json)
+    except json.JSONDecodeError:
+        return
+    for tc in step.get("tool_calls") or []:
+        name = tc.get("name", "tool")
+        icon = _TOOL_ICONS.get(name, "⚙️")
+        detail = _summarize_tool_params(tc.get("arguments") or tc.get("args") or {})
+        suffix = f" -> {detail}" if detail else ""
+        print(
+            f"      [+{elapsed:5.1f}s]    🤖↳ [subagent:{short_id}] {icon} {name}{suffix}",
+            flush=True,
+        )
 
 
 def _process_stream_line(
@@ -330,15 +402,16 @@ def _process_stream_line(
         obj = json.loads(line)
     except json.JSONDecodeError:
         chunks.append(line)
-        print(f"      [+{elapsed:5.1f}s] {line}", flush=True)
+        print(f"      [+{elapsed:5.1f}s] 💬 {line}", flush=True)
         return
 
     if not isinstance(obj, dict):
         return
     ev = obj.get("event")
     if ev == "init":
-        telemetry["conversation_id"] = str(obj.get("conversation_id", ""))
-        print(f"      [+{elapsed:5.1f}s] [agy] Session started", flush=True)
+        conv_id = str(obj.get("conversation_id", ""))
+        telemetry["conversation_id"] = conv_id
+        print(f"      [+{elapsed:5.1f}s] 🔌 Session started ({conv_id[:8]})", flush=True)
     elif ev == "step_update":
         upd = obj.get("step_update") or {}
         if upd.get("text_delta"):
@@ -358,8 +431,8 @@ def _process_stream_line(
         if res.get("response"):
             chunks.append(str(res["response"]))
         print(
-            f"      [+{elapsed:5.1f}s] [agy] Result: {res.get('status', 'DONE')} "
-            f"(tokens={telemetry['total_tokens']:,})",
+            f"      [+{elapsed:5.1f}s] 🏁 Result: {res.get('status', 'DONE')} "
+            f"(total tokens={telemetry['total_tokens']:,})",
             flush=True,
         )
     elif "usage" in obj:
@@ -373,8 +446,9 @@ def _process_stream_line(
 
 
 def run_timed_agent_command(agent_cmd: str) -> Dict[str, Any]:
-    """Execute and time an agent command, streaming live progress and parsing telemetry."""
+    """Execute and time an agent command, streaming main and sub-agent progress."""
     start_ns = time.perf_counter_ns()
+    start_epoch = time.time()
     telemetry: Dict[str, Any] = {
         "duration_sec": 0.0,
         "exit_code": 0,
@@ -385,6 +459,7 @@ def run_timed_agent_command(agent_cmd: str) -> Dict[str, Any]:
         "conversation_id": "",
     }
     chunks: List[str] = []
+    seen_lines: Dict[str, int] = {}
     with subprocess.Popen(
         agent_cmd,
         shell=True,
@@ -394,9 +469,23 @@ def run_timed_agent_command(agent_cmd: str) -> Dict[str, Any]:
         text=True,
         bufsize=1,
     ) as proc:
+        sel = selectors.DefaultSelector()
         if proc.stdout is not None:
-            for raw_line in proc.stdout:
-                _process_stream_line(raw_line, start_ns, telemetry, chunks)
+            sel.register(proc.stdout, selectors.EVENT_READ)
+        while sel.get_map():
+            events = sel.select(timeout=1.5)
+            if not events:
+                _poll_subagent_transcripts(
+                    start_epoch, start_ns, str(telemetry["conversation_id"]), seen_lines
+                )
+                continue
+            for key, _ in events:
+                raw_line = key.fileobj.readline()  # type: ignore[union-attr]
+                if raw_line:
+                    _process_stream_line(raw_line, start_ns, telemetry, chunks)
+                else:
+                    sel.unregister(key.fileobj)
+        sel.close()
         stderr_text = proc.stderr.read().strip() if proc.stderr is not None else ""
         proc.wait()
         telemetry["exit_code"] = proc.returncode
@@ -678,7 +767,7 @@ def main() -> int:
         if not args.json:
             print(msg, flush=True)
 
-    _log(f"[1/4] Starting '{args.label}' (version={args.version or 'auto'})...")
+    _log(f"\n🚀 [1/4] Starting '{args.label}' (version={args.version or 'auto'})...")
     telemetry: Dict[str, Any] = {
         "duration_sec": 0.0,
         "exit_code": 0,
@@ -688,31 +777,31 @@ def main() -> int:
         "subagents_used": "unknown",
     }
     if args.agent_cmd:
-        _log(f"      Executing agent command: {args.agent_cmd}")
+        _log("      🤖 Running agent & streaming live main + sub-agent steps:")
         telemetry = run_timed_agent_command(args.agent_cmd)
         _log(
-            f"      Agent finished in {telemetry['duration_sec']:.3f}s "
-            f"(exit_code={telemetry['exit_code']}, tokens={telemetry['total_tokens']:,}, "
+            f"      ✅ Agent finished in {telemetry['duration_sec']:.3f}s "
+            f"(exit={telemetry['exit_code']}, tokens={telemetry['total_tokens']:,}, "
             f"subagents={telemetry['subagents_used']})."
         )
     elif args.agent_duration_sec is not None:
         telemetry["duration_sec"] = float(args.agent_duration_sec)
-        _log(f"      Using recorded agent duration: {telemetry['duration_sec']:.3f}s.")
+        _log(f"      ⏱️  Using recorded agent duration: {telemetry['duration_sec']:.3f}s.")
     else:
         t0 = time.perf_counter_ns()
         measure_harness_features()
         telemetry["duration_sec"] = round((time.perf_counter_ns() - t0) / 1_000_000_000.0, 4)
 
-    _log("[2/4] Measuring harness checks & context efficiency...")
+    _log("\n🧪 [2/4] Measuring harness checks & context efficiency...")
     db_path = Path(args.db_file)
     report_path = Path(args.report_file)
     with init_db(db_path) as conn:
-        _log("[3/4] Benchmarking target algorithm & saving run to SQLite...")
+        _log("📊 [3/4] Benchmarking target algorithm & saving run to SQLite...")
         snapshot = _build_snapshot(args, conn, telemetry)
         record_run(conn, snapshot)
         runs = fetch_runs(conn)
 
-    _log(f"[4/4] Rendering {report_path.name}...")
+    _log(f"📝 [4/4] Rendering {report_path.name}...")
     report_md = render_markdown_report(runs, db_path)
     report_path.write_text(report_md, encoding="utf-8")
 

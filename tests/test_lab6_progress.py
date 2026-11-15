@@ -747,3 +747,11 @@ class TestPart9MakefileCleanupAndTelemetry:
         assert row["fork_overhead_sec"] == 4.5
         report_text = report_file.read_text(encoding="utf-8")
         assert "14.500" in report_text
+
+    def test_part_9f_rich_emoji_console_formatting(self) -> None:
+        """Verify track_performance.py formats stream events with emojis and step detail."""
+        tracker_text = (REPO_ROOT / "scripts" / "track_performance.py").read_text(
+            encoding="utf-8"
+        )
+        for marker in ("🚀", "🧪", "📊", "📝", "🤖", "📖", "💻"):
+            assert marker in tracker_text, f"Missing '{marker}' emoji in track_performance.py"
