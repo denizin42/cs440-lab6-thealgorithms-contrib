@@ -9,11 +9,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Add `context/phase2-fastpath.md` (symlinked into `.claude/context/` and imported in `CLAUDE.md`) and MCP `get_phase2_fastpath_bundle` tool to eliminate exploratory `ls`/`grep` turns and enforce single-pass post-edit `contributing-reviewer` auditing
+- Record live `v9` fast-path benchmark (`108.264s`, `-55.9%` vs `v1`; sub-agents cut from `92s`/`49,642` tokens in `v8` to `9s`/`26,447` tokens in `v9`) in `PERFORMANCE_REPORT.md`
 - Add `reset_target_to_buggy()` in `scripts/report_evidence.py` and automatic pre-run reset in `scripts/track_performance.py` (`--no-reset-target` opt-out) so every `make benchmark` run genuinely solves Issue `#15656` (`trials >= 171` `OverflowError`) from scratch
 - Record live `v8` solve-from-scratch benchmark (`98.587s`, `-59.8%` vs `v1`, `51,727` main tokens, `issue-researcher` `24.00s` / `16,545` tokens, `contributing-reviewer` `68.00s` / `33,097` tokens) in `PERFORMANCE_REPORT.md`
 
 ### Fixed
 
+- Display sub-agent role names (`[issue-researcher]`, `[contributing-reviewer]`) instead of `[subagent:<id>]` in live console output and filter out pre-existing transcripts in `iter_recent_subagent_transcripts()`
 - Fix `_detect_subagent_role()` in `scripts/report_evidence.py` so `issue-researcher` (`fbd44a9e`) and `contributing-reviewer` (`2eb5608c`) are accurately labeled in `PERFORMANCE_REPORT.md`
 - Instruct benchmark `PROMPT` in `Makefile` to invoke MCP tools (`verify_contribution_target`, `get_issue_root_cause_context`, `run_fast_compliance_audit`) with `EnableMCPTools=true`
 

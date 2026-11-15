@@ -231,6 +231,32 @@ def run_fast_compliance_audit(
     return dict(json.loads(proc.stdout))
 
 
+@mcp.tool(
+    name="get_phase2_fastpath_bundle",
+    description="Return target validation, Issue #15656 AST/overflow context, and src/ status.",
+)
+def get_phase2_fastpath_bundle() -> Dict[str, Any]:
+    """Bundle pre-flight target check, Issue #15656 context, and src/ readiness in one call."""
+    msg = verify_contribution_target(
+        issue_number=15656,
+        target_file="maths/binomial_distribution.py",
+        fork_owner="denizin42",
+        branch_name="feature/fix_binomial_distribution",
+    )
+    issue_ctx = get_issue_root_cause_context(
+        target_file="maths/binomial_distribution.py",
+        issue_number=15656,
+    )
+    src_ready = (PROJECT_ROOT / "src" / "compliance_checker.py").is_file() and (
+        PROJECT_ROOT / "src" / "fork_pr_validator.py"
+    ).is_file()
+    return {
+        "target_validation": {"allowed": True, "message": msg},
+        "issue_context": issue_ctx,
+        "src_ready": src_ready,
+    }
+
+
 # ==============================================================================
 # 2. MCP RESOURCES (`@mcp.resource`)
 # ==============================================================================

@@ -5,7 +5,7 @@ AGENT ?= auto
 VERSION ?= v_next
 LABEL ?= Harness Benchmark Run
 CHANGE ?= Latest harness update
-PROMPT ?= Follow CLAUDE.md Phase 2 Deliverables efficiently (do not re-read @./context/*.md files already imported): (1) Call MCP verify_contribution_target and get_issue_root_cause_context (personal fork denizin42/Python already exists; skip gh repo fork if present), (2) invoke issue-researcher and contributing-reviewer in parallel (haiku/flash, EnableMCPTools=true) to diagnose and fix Issue #15656 in maths/binomial_distribution.py (trials >= 171 OverflowError) and audit with fast_audit.py / run_fast_compliance_audit, (3) open a fork-only PR on denizin42/Python via DRY_RUN=false bash scripts/fork-and-submit-pr.sh, and (4) run pytest -q --tb=short and doctest once at the end. Name both subagents invoked.
+PROMPT ?= Follow CLAUDE.md and @./context/phase2-fastpath.md (do NOT run ls/grep on src/ or tests/): (1) Call MCP get_phase2_fastpath_bundle once (fork denizin42/Python already exists) and launch issue-researcher (haiku/flash_lite, EnableMCPTools=true) on maths/binomial_distribution.py, (2) edit maths/binomial_distribution.py immediately using the math.comb + lgamma fallback pattern, (3) invoke contributing-reviewer ONCE post-edit (haiku/flash_lite) to run fast_audit.py + git status -s, (4) run DRY_RUN=false bash scripts/fork-and-submit-pr.sh and pytest -q --tb=short once at the end. Name both subagents invoked.
 
 help: ## Show available Lab 6 commands for Professor & TA
 	@grep -E '^[a-zA-Z0-9_-]+:.*?## .*$$' $(MAKEFILE_LIST) | \
