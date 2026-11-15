@@ -438,6 +438,7 @@ class TestPart7PerformanceTracker:
                 "v1 Baseline Harness",
                 "--agent-cmd",
                 f"{sys.executable} -c \"import time; time.sleep(0.05)\"",
+                "--no-reset-target",
                 "--db-file",
                 str(db_file),
                 "--report-file",
@@ -682,6 +683,7 @@ class TestPart9MakefileCleanupAndTelemetry:
                 "Added token and subagent tracking",
                 "--agent-cmd",
                 fake_json_cmd,
+                "--no-reset-target",
                 "--db-file",
                 str(db_file),
                 "--report-file",
@@ -810,6 +812,7 @@ class TestPart10AgentAgnosticSupport:
                 "Claude Code Run",
                 "--agent-cmd",
                 cmd,
+                "--no-reset-target",
                 "--db-file",
                 str(db_file),
                 "--report-file",
@@ -942,3 +945,32 @@ class TestPart12PerfReportProofAndSubagentBreakdown:
         makefile = (REPO_ROOT / "Makefile").read_text(encoding="utf-8")
         assert "get_issue_root_cause_context" in makefile
         assert "verify_contribution_target" in makefile
+
+
+class TestPart13BenchmarkResetsProblem:
+    """Verifies benchmark runs reset maths/binomial_distribution.py to Issue #15656 state."""
+
+    def test_part_13a_reset_target_restores_buggy_issue_15656(self, tmp_path: Path) -> None:
+        """Verify reset_target_to_buggy writes the factorial(trials) OverflowError baseline."""
+        # pylint: disable=import-outside-toplevel
+        from scripts.report_evidence import reset_target_to_buggy
+
+        target = tmp_path / "binomial_distribution.py"
+        reset_target_to_buggy(target)
+        text = target.read_text(encoding="utf-8")
+        assert "float(factorial(trials))" in text
+        proc = subprocess.run(
+            [
+                sys.executable,
+                "-c",
+                "import sys; sys.path.insert(0, str(sys.argv[1])); "
+                "from binomial_distribution import binomial_distribution; "
+                "binomial_distribution(100, 171, 0.5)",
+                str(tmp_path),
+            ],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        assert proc.returncode != 0
+        assert "OverflowError" in proc.stderr
