@@ -13,15 +13,15 @@ if [[ "${FORK_OWNER,,}" == *"thealgorithms"* ]]; then
     exit 2
 fi
 
-echo "[1/3] Checking personal fork ${FORK_REPO}..."
+echo "🧹 [1/3] Checking personal fork ${FORK_REPO}..."
 if ! gh repo view "$FORK_REPO" >/dev/null 2>&1; then
-    echo "      Fork ${FORK_REPO} does not exist; nothing to clean."
+    echo "      ✅ Fork ${FORK_REPO} does not exist; nothing to clean."
     exit 0
 fi
 
 DEFAULT_BRANCH="$(gh repo view "$FORK_REPO" --json defaultBranchRef -q '.defaultBranchRef.name')"
 
-echo "[2/3] Closing any open Pull Requests on ${FORK_REPO}..."
+echo "🔒 [2/3] Closing any open Pull Requests on ${FORK_REPO}..."
 OPEN_PRS="$(gh pr list --repo "$FORK_REPO" --state open --json number -q '.[].number' || true)"
 if [[ -n "$OPEN_PRS" ]]; then
     for pr_num in $OPEN_PRS; do
@@ -30,10 +30,10 @@ if [[ -n "$OPEN_PRS" ]]; then
             --comment "Closed by automated Lab 6 benchmark cleanup." >/dev/null || true
     done
 else
-    echo "      No open PRs found."
+    echo "      ✅ No open PRs found."
 fi
 
-echo "[3/3] Pruning Lab 6 test branches on ${FORK_REPO} (keeping ${DEFAULT_BRANCH})..."
+echo "✂️  [3/3] Pruning Lab 6 test branches on ${FORK_REPO} (keeping ${DEFAULT_BRANCH})..."
 BRANCHES="$(gh api "repos/${FORK_REPO}/branches" --paginate -q '.[].name' || true)"
 for br in $BRANCHES; do
     if [[ "$br" == feature/* || "$br" == feat/* || "$br" == fix/* || "$br" == refactor/* ]]; then
@@ -42,4 +42,4 @@ for br in $BRANCHES; do
     fi
 done
 
-echo "[cleanup-fork] ${FORK_REPO} is clean and ready for the next run."
+echo "✅ [cleanup-fork] ${FORK_REPO} is clean and ready for the next run."
