@@ -5,7 +5,7 @@ AGENT ?= auto
 VERSION ?= v_next
 LABEL ?= Harness Benchmark Run
 CHANGE ?= Latest harness update
-PROMPT ?= Follow CLAUDE.md Phase 2 Deliverables efficiently (do not re-read @./context/*.md files already imported): (1) Ensure personal fork denizin42/Python exists (gh repo fork TheAlgorithms/Python --clone=false if missing), (2) invoke issue-researcher and contributing-reviewer in parallel using a fast model (haiku/flash) on maths/binomial_distribution.py and src/, (3) open a fork-only PR on denizin42/Python via DRY_RUN=false bash scripts/fork-and-submit-pr.sh, and (4) run pytest -q --tb=short and doctest once at the end. Name both subagents invoked.
+PROMPT ?= Follow CLAUDE.md Phase 2 Deliverables efficiently (do not re-read @./context/*.md files already imported): (1) Ensure personal fork denizin42/Python exists (gh repo fork TheAlgorithms/Python --clone=false if missing) and call MCP verify_contribution_target + get_issue_root_cause_context, (2) invoke issue-researcher and contributing-reviewer in parallel using a fast model (haiku/flash, EnableMCPTools=true) on maths/binomial_distribution.py and src/ (using fast_audit.py / run_fast_compliance_audit), (3) open a fork-only PR on denizin42/Python via DRY_RUN=false bash scripts/fork-and-submit-pr.sh, and (4) run pytest -q --tb=short and doctest once at the end. Name both subagents invoked.
 
 help: ## Show available Lab 6 commands for Professor & TA
 	@grep -E '^[a-zA-Z0-9_-]+:.*?## .*$$' $(MAKEFILE_LIST) | \

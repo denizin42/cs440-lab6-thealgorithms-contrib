@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- Fix `_detect_subagent_role()` in `scripts/report_evidence.py` so `issue-researcher` (`fbd44a9e`) and `contributing-reviewer` (`2eb5608c`) are accurately labeled in `PERFORMANCE_REPORT.md`
+- Instruct benchmark `PROMPT` in `Makefile` to invoke MCP tools (`verify_contribution_target`, `get_issue_root_cause_context`, `run_fast_compliance_audit`) with `EnableMCPTools=true`
+
 ### Changed
 
 - Make `Makefile` (`AGENT=auto|claude|agy` and `AGENT_CMD`), `scripts/track_performance.py` (Claude Code + `agy` `stream-json` parsing), `CLAUDE.md`, and `README.md` agent-agnostic
