@@ -311,7 +311,7 @@ def _build_chart_series(runs: List[Dict[str, Any]]) -> Dict[str, Any]:
 
 
 def render_markdown_report(runs: List[Dict[str, Any]], db_path: Path) -> str:
-    """Render `PERFORMANCE_REPORT.md` with baseline comparisons and Mermaid charts."""
+    """Render `PERFORMANCE_REPORT.md` focused on agent algorithm-fix speed."""
     latest = runs[-1]
     baseline = next((r for r in runs if r["is_baseline"] == 1), runs[0])
     chart = _build_chart_series(runs)
@@ -320,72 +320,49 @@ def render_markdown_report(runs: List[Dict[str, Any]], db_path: Path) -> str:
     for r in runs:
         tag = f"`{r['version_tag']}`" + (" **(Baseline)**" if r["is_baseline"] else "")
         delta_s = _format_delta(r["agent_duration_sec"], baseline["agent_duration_sec"], "s")
-        issue_status = "RESOLVED" if r["overflow_171_resolved"] else "Phase 2 Pending"
+        issue_status = "RESOLVED" if r["overflow_171_resolved"] else "UNRESOLVED"
+        ast_status = "PASS" if r["ast_compliant"] else "FAIL"
         history_rows.append(
             f"| {r['id']} | {tag} | {r['label']} | `{r['agent_duration_sec']:.3f}s` | "
-            f"`{delta_s}` | `{r['harness_eval_ms']:.1f} ms` | "
-            f"**{r['harness_score_pct']}%** ({r['passed_tests']}/{r['total_tests']}) | "
-            f"{r['compression_ratio_pct']}% | {issue_status} |"
+            f"`{delta_s}` | {issue_status} | {ast_status} "
+            f"({r['doctests_attempted']} doctests, `{r['algo_exec_ms']} ms`) |"
         )
     history_table = "\n".join(history_rows)
 
-    return f"""# CS 440 Lab 6 — Agent & Harness Performance Report
+    return f"""# CS 440 Lab 6 — Agent Algorithm-Fix Performance Report
 
-SQLite Database: `{db_path.name}` | Total Runs Recorded: **{len(runs)}** | Baseline Version: **`{baseline["version_tag"]}`** ({baseline["label"]})
+SQLite Database: `{db_path.name}` | Total Runs: **{len(runs)}** | Baseline: **`{baseline["version_tag"]}`** ({baseline["label"]})
 
 ---
 
-## 1. Baseline (`{baseline["version_tag"]}`) vs. Latest (`{latest["version_tag"]}`) Comparison
+## 1. Baseline (`{baseline["version_tag"]}`) vs. Latest (`{latest["version_tag"]}`) Algorithm-Fix Speed
 
 | Metric | Baseline (`{baseline["version_tag"]}`) | Latest (`{latest["version_tag"]}`) | Delta vs. Baseline |
 | :--- | :---: | :---: | :---: |
-| **Agent Run Duration** | `{baseline["agent_duration_sec"]:.3f} s` | `{latest["agent_duration_sec"]:.3f} s` | `{_format_delta(latest["agent_duration_sec"], baseline["agent_duration_sec"], "s")}` |
-| **Harness Test Eval Speed** | `{baseline["harness_eval_ms"]:.1f} ms` | `{latest["harness_eval_ms"]:.1f} ms` | `{_format_delta(latest["harness_eval_ms"], baseline["harness_eval_ms"], "ms")}` |
-| **Harness Readiness Score** | `{baseline["harness_score_pct"]}%` | `{latest["harness_score_pct"]}%` | `{_format_delta(latest["harness_score_pct"], baseline["harness_score_pct"], "%")}` |
-| **Context Compression (Strategy 3)** | `{baseline["compression_ratio_pct"]}%` | `{latest["compression_ratio_pct"]}%` | `{latest["curated_context_tokens"]} / {latest["raw_contributing_tokens"]} tokens` |
-| **Skill Startup Savings (Strategy 2)** | `{baseline["progressive_skill_savings_pct"]}%` | `{latest["progressive_skill_savings_pct"]}%` | Frontmatter-only load |
-| **Issue #15656 (`n=171`) Benchmark** | `{"RESOLVED" if baseline["overflow_171_resolved"] else "UNRESOLVED"}` | `{"RESOLVED" if latest["overflow_171_resolved"] else "UNRESOLVED"}` | `{latest["algo_exec_ms"]} ms` (`{latest["doctests_attempted"]}` doctests) |
+| **Agent Fix Duration** | `{baseline["agent_duration_sec"]:.3f} s` | `{latest["agent_duration_sec"]:.3f} s` | `{_format_delta(latest["agent_duration_sec"], baseline["agent_duration_sec"], "s")}` |
+| **Issue #15656 (`n=171`) Fix** | `{"RESOLVED" if baseline["overflow_171_resolved"] else "UNRESOLVED"}` | `{"RESOLVED" if latest["overflow_171_resolved"] else "UNRESOLVED"}` | `{latest["target_file"] if "target_file" in latest else "maths/binomial_distribution.py"}` |
+| **AST `CONTRIBUTING.md` Compliance** | `{"PASS" if baseline["ast_compliant"] else "FAIL"}` | `{"PASS" if latest["ast_compliant"] else "FAIL"}` | `{latest["doctests_attempted"]}` doctests |
+| **Doctest Execution Time** | `{baseline["algo_exec_ms"]:.2f} ms` | `{latest["algo_exec_ms"]:.2f} ms` | `{_format_delta(latest["algo_exec_ms"], baseline["algo_exec_ms"], "ms")}` |
 
 ---
 
-## 2. Agent Run Duration Trend (Seconds — Lower is Faster)
+## 2. Agent Fix Duration Trend (Seconds — Lower is Faster)
 
 ```mermaid
 xychart-beta
-    title "Agent Run Duration (s) Across Harness Versions"
+    title "Agent Fix Duration (s) Across Harness Versions"
     x-axis [{chart["x_versions"]}]
-    y-axis "Agent Run Duration (s)" 0 --> {chart["y_sec_max"]}
+    y-axis "Agent Fix Duration (s)" 0 --> {chart["y_sec_max"]}
     bar [{chart["y_agent_secs"]}]
     line [{chart["y_agent_secs"]}]
 ```
 
 ---
 
-## 3. Harness Test Evaluation Speed (ms) & Readiness (%)
+## 3. SQLite Run History (`agent_runs` Table)
 
-```mermaid
-xychart-beta
-    title "Harness Eval Time (ms) Across Versions"
-    x-axis [{chart["x_versions"]}]
-    y-axis "Eval Time (ms)" 0 --> {chart["y_ms_max"]}
-    bar [{chart["y_eval_ms"]}]
-    line [{chart["y_eval_ms"]}]
-```
-
-```mermaid
-xychart-beta
-    title "Harness Readiness Score (%) Across Versions"
-    x-axis [{chart["x_versions"]}]
-    y-axis "Readiness (%)" 0 --> 100
-    line [{chart["y_scores"]}]
-```
-
----
-
-## 4. SQLite Run History (`agent_runs` Table)
-
-| Run | Version | Tuning Milestone | Agent Time | Delta vs. `{baseline["version_tag"]}` | Harness Eval | Readiness | Token Compression | Issue #15656 |
-| :---: | :--- | :--- | :---: | :---: | :---: | :---: | :---: | :--- |
+| Run | Version | Harness / Prompt Tuning | Agent Fix Duration | Delta vs. `{baseline["version_tag"]}` | Issue #15656 | Compliance & Doctests |
+| :---: | :--- | :--- | :---: | :---: | :--- | :--- |
 {history_table}
 """
 
