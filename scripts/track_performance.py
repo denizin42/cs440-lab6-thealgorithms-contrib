@@ -56,9 +56,22 @@ CREATE TABLE IF NOT EXISTS agent_runs (
     overflow_171_resolved INTEGER NOT NULL,
     algo_exec_ms REAL NOT NULL,
     feature_breakdown_json TEXT NOT NULL,
-    notes TEXT NOT NULL DEFAULT ''
+    notes TEXT NOT NULL DEFAULT '',
+    input_tokens INTEGER NOT NULL DEFAULT 0,
+    output_tokens INTEGER NOT NULL DEFAULT 0,
+    total_tokens INTEGER NOT NULL DEFAULT 0,
+    subagents_used TEXT NOT NULL DEFAULT 'unknown',
+    changelog_entry TEXT NOT NULL DEFAULT ''
 );
 """
+
+MIGRATION_COLUMNS = (
+    ("input_tokens", "INTEGER NOT NULL DEFAULT 0"),
+    ("output_tokens", "INTEGER NOT NULL DEFAULT 0"),
+    ("total_tokens", "INTEGER NOT NULL DEFAULT 0"),
+    ("subagents_used", "TEXT NOT NULL DEFAULT 'unknown'"),
+    ("changelog_entry", "TEXT NOT NULL DEFAULT ''"),
+)
 
 
 def _estimate_tokens(text: str) -> int:
@@ -67,11 +80,17 @@ def _estimate_tokens(text: str) -> int:
 
 
 def init_db(db_path: Path) -> sqlite3.Connection:
-    """Initialize SQLite database and return an open connection."""
+    """Initialize SQLite database, run schema migrations, and return connection."""
     db_path.parent.mkdir(parents=True, exist_ok=True)
     conn = sqlite3.connect(db_path)
     conn.row_factory = sqlite3.Row
     conn.execute(SCHEMA_SQL)
+    existing_cols = {
+        row["name"] for row in conn.execute("PRAGMA table_info(agent_runs)").fetchall()
+    }
+    for col_name, col_def in MIGRATION_COLUMNS:
+        if col_name not in existing_cols:
+            conn.execute(f"ALTER TABLE agent_runs ADD COLUMN {col_name} {col_def}")
     conn.commit()
     return conn
 
@@ -134,7 +153,7 @@ def measure_harness_features() -> Dict[str, Any]:
             "pytest",
             "tests/test_lab6_progress.py",
             "-k",
-            "not TestPart7PerformanceTracker",
+            "not TestPart7PerformanceTracker and not TestPart9MakefileCleanupAndTelemetry",
             "-v",
             "--tb=no",
         ],
@@ -222,12 +241,171 @@ def measure_algorithm_benchmark() -> Dict[str, Any]:
     }
 
 
-def run_timed_agent_command(agent_cmd: str) -> tuple[float, int]:
-    """Execute and time an agent command in seconds, returning (duration_sec, exit_code)."""
+def _latest_changelog_entry() -> str:
+    """Return the most recent bullet under `## [Unreleased]` in `CHANGELOG.md`."""
+    changelog_path = REPO_ROOT / "CHANGELOG.md"
+    if not changelog_path.exists():
+        return ""
+    in_unreleased = False
+    for line in changelog_path.read_text(encoding="utf-8").splitlines():
+        if line.startswith("## [Unreleased]"):
+            in_unreleased = True
+            continue
+        if in_unreleased and line.startswith("## ["):
+            break
+        if in_unreleased and line.lstrip().startswith("- "):
+            return line.lstrip()[2:].strip()
+    return ""
+
+
+def _detect_subagents(response_text: str, conversation_id: str) -> str:
+    """Detect whether `issue-researcher` and `contributing-reviewer` were invoked."""
+    corpus = response_text
+    if conversation_id:
+        for base in (
+            Path.home() / ".gemini-personal" / ".gemini" / "antigravity-cli" / "brain",
+            Path.home() / ".gemini" / "antigravity-cli" / "brain",
+        ):
+            transcript = base / conversation_id / ".system_generated" / "logs" / "transcript.jsonl"
+            if transcript.exists():
+                corpus += "\n" + transcript.read_text(encoding="utf-8", errors="ignore")
+                break
+    found = [
+        name
+        for name in ("issue-researcher", "contributing-reviewer")
+        if name in corpus
+    ]
+    return ", ".join(found) if found else "none detected"
+
+
+def _summarize_tool_params(params: Dict[str, Any]) -> str:
+    """Return a concise one-line summary of tool/subagent parameters."""
+    for key in ("CommandLine", "Path", "TypeName", "Role", "ToolName", "Query", "Pattern"):
+        if params.get(key):
+            val = str(params[key]).replace("\n", " ").strip()
+            return val[:90] + ("..." if len(val) > 90 else "")
+    return ""
+
+
+def _format_step_update(upd: Dict[str, Any], elapsed: float) -> Optional[str]:
+    """Format a stream-json `step_update` into a detailed live console line."""
+    state = upd.get("state", "")
+    stype = upd.get("step_type", "step")
+    idx = upd.get("step_index", "?")
+    if stype == "user_input":
+        return None
+    info = upd.get("tool_info") or {}
+    tname = upd.get("tool_name") or info.get("name") or stype
+    if state == "ACTIVE" and stype in ("tool", "subagent"):
+        detail = _summarize_tool_params(info.get("parameters") or {})
+        suffix = f": {detail}" if detail else ""
+        return f"      [+{elapsed:5.1f}s] [agy] -> #{idx} {tname}{suffix}"
+    if state in ("DONE", "ERROR"):
+        dur = upd.get("duration_seconds")
+        dur_str = f" ({dur:.2f}s)" if isinstance(dur, (int, float)) else ""
+        err = (info.get("error") or {}).get("message", "")
+        err_str = f" ERROR: {err[:70]}" if err else ""
+        if stype == "agent_response":
+            tok = (upd.get("usage") or {}).get("total_tokens", 0)
+            tok_str = f" [tokens={tok:,}]" if tok else ""
+            return f"      [+{elapsed:5.1f}s] [agy] <- #{idx} response {state}{dur_str}{tok_str}"
+        return f"      [+{elapsed:5.1f}s] [agy] <- #{idx} {tname} {state}{dur_str}{err_str}"
+    return None
+
+
+def _process_stream_line(
+    raw_line: str,
+    start_ns: int,
+    telemetry: Dict[str, Any],
+    chunks: List[str],
+) -> None:
+    """Parse one stdout line (stream-json, json, or text) and print live progress."""
+    line = raw_line.strip()
+    if not line:
+        return
+    elapsed = (time.perf_counter_ns() - start_ns) / 1_000_000_000.0
+    try:
+        obj = json.loads(line)
+    except json.JSONDecodeError:
+        chunks.append(line)
+        print(f"      [+{elapsed:5.1f}s] {line}", flush=True)
+        return
+
+    if not isinstance(obj, dict):
+        return
+    ev = obj.get("event")
+    if ev == "init":
+        telemetry["conversation_id"] = str(obj.get("conversation_id", ""))
+        print(f"      [+{elapsed:5.1f}s] [agy] Session started", flush=True)
+    elif ev == "step_update":
+        upd = obj.get("step_update") or {}
+        if upd.get("text_delta"):
+            chunks.append(str(upd["text_delta"]))
+        msg = _format_step_update(upd, elapsed)
+        if msg:
+            print(msg, flush=True)
+    elif ev == "result":
+        res = obj.get("result") or {}
+        usage = res.get("usage") or {}
+        telemetry["input_tokens"] = int(usage.get("input_tokens", 0))
+        telemetry["output_tokens"] = int(usage.get("output_tokens", 0))
+        telemetry["total_tokens"] = int(usage.get("total_tokens", 0))
+        telemetry["conversation_id"] = str(
+            res.get("conversation_id", telemetry.get("conversation_id", ""))
+        )
+        if res.get("response"):
+            chunks.append(str(res["response"]))
+        print(
+            f"      [+{elapsed:5.1f}s] [agy] Result: {res.get('status', 'DONE')} "
+            f"(tokens={telemetry['total_tokens']:,})",
+            flush=True,
+        )
+    elif "usage" in obj:
+        usage = obj.get("usage") or {}
+        telemetry["input_tokens"] = int(usage.get("input_tokens", 0))
+        telemetry["output_tokens"] = int(usage.get("output_tokens", 0))
+        telemetry["total_tokens"] = int(usage.get("total_tokens", 0))
+        telemetry["conversation_id"] = str(obj.get("conversation_id", ""))
+        if obj.get("response"):
+            chunks.append(str(obj["response"]))
+
+
+def run_timed_agent_command(agent_cmd: str) -> Dict[str, Any]:
+    """Execute and time an agent command, streaming live progress and parsing telemetry."""
     start_ns = time.perf_counter_ns()
-    proc = subprocess.run(agent_cmd, shell=True, cwd=str(REPO_ROOT), check=False)
-    duration_sec = round((time.perf_counter_ns() - start_ns) / 1_000_000_000.0, 4)
-    return duration_sec, proc.returncode
+    telemetry: Dict[str, Any] = {
+        "duration_sec": 0.0,
+        "exit_code": 0,
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "total_tokens": 0,
+        "subagents_used": "none detected",
+        "conversation_id": "",
+    }
+    chunks: List[str] = []
+    with subprocess.Popen(
+        agent_cmd,
+        shell=True,
+        cwd=str(REPO_ROOT),
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+        bufsize=1,
+    ) as proc:
+        if proc.stdout is not None:
+            for raw_line in proc.stdout:
+                _process_stream_line(raw_line, start_ns, telemetry, chunks)
+        stderr_text = proc.stderr.read().strip() if proc.stderr is not None else ""
+        proc.wait()
+        telemetry["exit_code"] = proc.returncode
+
+    telemetry["duration_sec"] = round((time.perf_counter_ns() - start_ns) / 1_000_000_000.0, 4)
+    if stderr_text:
+        print(stderr_text, file=sys.stderr, flush=True)
+    telemetry["subagents_used"] = _detect_subagents(
+        "\n".join(chunks), str(telemetry.get("conversation_id", ""))
+    )
+    return telemetry
 
 
 def record_run(
@@ -248,8 +426,9 @@ def record_run(
             total_tests, harness_score_pct, compression_ratio_pct,
             progressive_skill_savings_pct, raw_contributing_tokens,
             curated_context_tokens, ast_compliant, doctests_attempted,
-            overflow_171_resolved, algo_exec_ms, feature_breakdown_json, notes
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            overflow_171_resolved, algo_exec_ms, feature_breakdown_json, notes,
+            input_tokens, output_tokens, total_tokens, subagents_used, changelog_entry
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
         (
             snapshot["version_tag"],
@@ -273,6 +452,11 @@ def record_run(
             algo["exec_ms"],
             json.dumps(snapshot["feature_breakdown"]),
             snapshot["notes"],
+            snapshot["input_tokens"],
+            snapshot["output_tokens"],
+            snapshot["total_tokens"],
+            snapshot["subagents_used"],
+            snapshot["changelog_entry"],
         ),
     )
     conn.commit()
@@ -310,6 +494,12 @@ def _build_chart_series(runs: List[Dict[str, Any]]) -> Dict[str, Any]:
     }
 
 
+def _format_tokens(val: Any) -> str:
+    """Format an integer token count for Markdown tables."""
+    count = int(val or 0)
+    return f"`{count:,}`" if count > 0 else "`n/a`"
+
+
 def render_markdown_report(runs: List[Dict[str, Any]], db_path: Path) -> str:
     """Render `PERFORMANCE_REPORT.md` focused on agent algorithm-fix speed."""
     latest = runs[-1]
@@ -321,11 +511,12 @@ def render_markdown_report(runs: List[Dict[str, Any]], db_path: Path) -> str:
         tag = f"`{r['version_tag']}`" + (" **(Baseline)**" if r["is_baseline"] else "")
         delta_s = _format_delta(r["agent_duration_sec"], baseline["agent_duration_sec"], "s")
         issue_status = "RESOLVED" if r["overflow_171_resolved"] else "UNRESOLVED"
-        ast_status = "PASS" if r["ast_compliant"] else "FAIL"
+        sub_str = r.get("subagents_used", "unknown") or "unknown"
+        chg_str = r.get("changelog_entry", "") or r["label"]
         history_rows.append(
-            f"| {r['id']} | {tag} | {r['label']} | `{r['agent_duration_sec']:.3f}s` | "
-            f"`{delta_s}` | {issue_status} | {ast_status} "
-            f"({r['doctests_attempted']} doctests, `{r['algo_exec_ms']} ms`) |"
+            f"| {r['id']} | {tag} | {chg_str} | `{r['agent_duration_sec']:.3f}s` | "
+            f"`{delta_s}` | {_format_tokens(r.get('total_tokens'))} | `{sub_str}` | {issue_status} "
+            f"({r['doctests_attempted']} doctests) |"
         )
     history_table = "\n".join(history_rows)
 
@@ -337,12 +528,13 @@ SQLite Database: `{db_path.name}` | Total Runs: **{len(runs)}** | Baseline: **`{
 
 ## 1. Baseline (`{baseline["version_tag"]}`) vs. Latest (`{latest["version_tag"]}`) Algorithm-Fix Speed
 
-| Metric | Baseline (`{baseline["version_tag"]}`) | Latest (`{latest["version_tag"]}`) | Delta vs. Baseline |
+| Metric | Baseline (`{baseline["version_tag"]}`) | Latest (`{latest["version_tag"]}`) | Delta / Status |
 | :--- | :---: | :---: | :---: |
 | **Agent Fix Duration** | `{baseline["agent_duration_sec"]:.3f} s` | `{latest["agent_duration_sec"]:.3f} s` | `{_format_delta(latest["agent_duration_sec"], baseline["agent_duration_sec"], "s")}` |
-| **Issue #15656 (`n=171`) Fix** | `{"RESOLVED" if baseline["overflow_171_resolved"] else "UNRESOLVED"}` | `{"RESOLVED" if latest["overflow_171_resolved"] else "UNRESOLVED"}` | `{latest["target_file"] if "target_file" in latest else "maths/binomial_distribution.py"}` |
+| **Total Agent Tokens** | {_format_tokens(baseline.get("total_tokens"))} | {_format_tokens(latest.get("total_tokens"))} | `in={latest.get("input_tokens", 0):,}, out={latest.get("output_tokens", 0):,}` |
+| **Sub-Agents Invoked** | `{baseline.get("subagents_used", "unknown")}` | `{latest.get("subagents_used", "unknown")}` | `issue-researcher` & `contributing-reviewer` |
+| **Issue #15656 (`n=171`) Fix** | `{"RESOLVED" if baseline["overflow_171_resolved"] else "UNRESOLVED"}` | `{"RESOLVED" if latest["overflow_171_resolved"] else "UNRESOLVED"}` | `maths/binomial_distribution.py` |
 | **AST `CONTRIBUTING.md` Compliance** | `{"PASS" if baseline["ast_compliant"] else "FAIL"}` | `{"PASS" if latest["ast_compliant"] else "FAIL"}` | `{latest["doctests_attempted"]}` doctests |
-| **Doctest Execution Time** | `{baseline["algo_exec_ms"]:.2f} ms` | `{latest["algo_exec_ms"]:.2f} ms` | `{_format_delta(latest["algo_exec_ms"], baseline["algo_exec_ms"], "ms")}` |
 
 ---
 
@@ -361,8 +553,8 @@ xychart-beta
 
 ## 3. SQLite Run History (`agent_runs` Table)
 
-| Run | Version | Harness / Prompt Tuning | Agent Fix Duration | Delta vs. `{baseline["version_tag"]}` | Issue #15656 | Compliance & Doctests |
-| :---: | :--- | :--- | :---: | :---: | :--- | :--- |
+| Run | Version | Change / Tuning | Duration | Delta vs. `{baseline["version_tag"]}` | Tokens | Sub-Agents | Verification |
+| :---: | :--- | :--- | :---: | :---: | :---: | :--- | :--- |
 {history_table}
 """
 
@@ -370,8 +562,7 @@ xychart-beta
 def _build_snapshot(
     args: argparse.Namespace,
     conn: sqlite3.Connection,
-    agent_duration_sec: float,
-    agent_exit_code: int,
+    telemetry: Dict[str, Any],
 ) -> Dict[str, Any]:
     """Assemble a complete performance snapshot dictionary."""
     existing = fetch_runs(conn)
@@ -386,6 +577,7 @@ def _build_snapshot(
         (r for r in existing if r["is_baseline"] == 1),
         existing[0] if existing else None,
     )
+    agent_duration_sec = float(telemetry["duration_sec"])
     baseline_sec = (
         agent_duration_sec
         if is_baseline or baseline_row is None
@@ -398,7 +590,7 @@ def _build_snapshot(
         "is_baseline": is_baseline,
         "label": args.label,
         "agent_command": args.agent_cmd or "",
-        "agent_exit_code": agent_exit_code,
+        "agent_exit_code": int(telemetry["exit_code"]),
         "agent_duration_sec": round(agent_duration_sec, 4),
         "delta_vs_baseline_sec": round(agent_duration_sec - baseline_sec, 4),
         "harness_eval_ms": harness["harness_eval_ms"],
@@ -409,6 +601,11 @@ def _build_snapshot(
         "context_efficiency": ctx,
         "algorithm_benchmark": algo,
         "notes": args.notes,
+        "input_tokens": int(telemetry.get("input_tokens", 0)),
+        "output_tokens": int(telemetry.get("output_tokens", 0)),
+        "total_tokens": int(telemetry.get("total_tokens", 0)),
+        "subagents_used": str(telemetry.get("subagents_used", "unknown")),
+        "changelog_entry": args.change or _latest_changelog_entry() or args.label,
     }
 
 
@@ -439,6 +636,7 @@ def main() -> int:
         default=None,
         help="Manual agent run duration in seconds (when not using --agent-cmd)",
     )
+    parser.add_argument("--change", default="", help="Changelog / change description for this run")
     parser.add_argument("--notes", default="", help="Optional tuning notes")
     parser.add_argument("--db-file", default=str(DEFAULT_DB_FILE), help="SQLite DB path")
     parser.add_argument(
@@ -452,25 +650,36 @@ def main() -> int:
             print(msg, flush=True)
 
     _log(f"[1/4] Starting '{args.label}' (version={args.version or 'auto'})...")
+    telemetry: Dict[str, Any] = {
+        "duration_sec": 0.0,
+        "exit_code": 0,
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "total_tokens": 0,
+        "subagents_used": "unknown",
+    }
     if args.agent_cmd:
         _log(f"      Executing agent command: {args.agent_cmd}")
-        duration_sec, exit_code = run_timed_agent_command(args.agent_cmd)
-        _log(f"      Agent finished in {duration_sec:.3f}s (exit_code={exit_code}).")
+        telemetry = run_timed_agent_command(args.agent_cmd)
+        _log(
+            f"      Agent finished in {telemetry['duration_sec']:.3f}s "
+            f"(exit_code={telemetry['exit_code']}, tokens={telemetry['total_tokens']:,}, "
+            f"subagents={telemetry['subagents_used']})."
+        )
     elif args.agent_duration_sec is not None:
-        duration_sec, exit_code = float(args.agent_duration_sec), 0
-        _log(f"      Using recorded agent duration: {duration_sec:.3f}s.")
+        telemetry["duration_sec"] = float(args.agent_duration_sec)
+        _log(f"      Using recorded agent duration: {telemetry['duration_sec']:.3f}s.")
     else:
         t0 = time.perf_counter_ns()
         measure_harness_features()
-        duration_sec = round((time.perf_counter_ns() - t0) / 1_000_000_000.0, 4)
-        exit_code = 0
+        telemetry["duration_sec"] = round((time.perf_counter_ns() - t0) / 1_000_000_000.0, 4)
 
     _log("[2/4] Measuring harness checks & context efficiency...")
     db_path = Path(args.db_file)
     report_path = Path(args.report_file)
     with init_db(db_path) as conn:
         _log("[3/4] Benchmarking target algorithm & saving run to SQLite...")
-        snapshot = _build_snapshot(args, conn, duration_sec, exit_code)
+        snapshot = _build_snapshot(args, conn, telemetry)
         record_run(conn, snapshot)
         runs = fetch_runs(conn)
 

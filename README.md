@@ -5,81 +5,97 @@
 
 ---
 
-## 1. Two-Phase Workflow: What **You** Do vs. What **Your Agent** Figures Out
+## 1. Quick Start for Professor & TA (`Makefile`)
 
-Just like Lab 5, this repository splits the work into two distinct phases:
+Everything in this repository can be verified or executed directly via the root [`Makefile`](./Makefile):
 
-| Phase | Who Does It | What Happens |
-| :--- | :--- | :--- |
-| **Phase 1: Build the Coding Harness (`TODO`s)** | **You (The Student)** | You read [`CONTRIBUTING.md`](./CONTRIBUTING.md) and the three lecture decks (*Components of a Coding Agent*, *Agent Skills*, *Introduction to Subagents*), then complete the **12 Context Engineering `TODO`s** in `CLAUDE.md`, `.claude/`, `context/`, `scripts/context-switcher.sh`, and `mcp_server.py` until `pytest -v` (`tests/test_lab6_progress.py`) is **12/12 green**. |
-| **Phase 2: Run the Agent Through Its Paces** | **Your Coding Agent (`agy` / `claude`)** | Once your harness tests are green, you launch your coding agent and tell it to resolve the selected `TheAlgorithms/Python` issue following `CLAUDE.md`. **The agent** uses your skills, sub-agents, hooks, and MCP server to diagnose the bug in `maths/` or `data_structures/`, fix the algorithm per `CONTRIBUTING.md`, generate the fork/PR automation inside `src/`, audit its diff via `contributing-reviewer`, and submit/prepare the fork-only Pull Request. |
+```bash
+# 1. Install Python dependencies (fastmcp, pydantic, pytest, pylint, mypy, ruff)
+make install
 
----
+# 2. Run all 35+ pytest harness, workflow, and telemetry tests
+make test
 
-## 2. Repository Structure
+# 3. Run pylint (10.00/10), ruff, and mypy static checks
+make lint
 
-```text
-cs440-lab6-thealgorithms-contrib/
-├── README.md                                  # Two-phase workflow, TODO roadmap, and verification commands
-├── CLAUDE.md                                  # [TODO Part 1, 2C, 2D, 4B] Target table, CONTRIBUTING.md memory, Task() rules
-├── AGENTS.md -> CLAUDE.md                     # Symlink for multi-harness compatibility
-├── CONTRIBUTING.md                            # Official unmodified TheAlgorithms/Python Contributing Guidelines
-├── CHANGELOG.md                               # Keep a Changelog history (enforced by .githooks/pre-commit)
-├── .mcp.json                                  # [Feature 2: MCP] Registers local FastMCP stdio server
-├── mcp_server.py                              # [TODO Part 5A–5C] @mcp.tool, @mcp.resource, and @mcp.prompt
-├── .claude/
-│   ├── settings.json                          # [TODO Part 2A] UserPromptSubmit & PreToolUse safety hooks
-│   ├── context/                               # [TODO Part 2E–2F] Modular context echoed by context-switcher.sh
-│   │   ├── contributing-rules.md
-│   │   ├── issue-brief.md
-│   │   └── fork-pr-workflow.md
-│   ├── skills/                                # [TODO Part 3A–3B] On-demand SKILL.md folders (Agent Skills Lecture)
-│   │   ├── thealgorithms-contributing/
-│   │   │   └── SKILL.md
-│   │   └── fork-pr-workflow/
-│   │       └── SKILL.md
-│   └── agents/                                # [TODO Part 4A] Isolated sub-agents (Subagents Lecture)
-│       ├── contributing-reviewer.md
-│       └── issue-researcher.md
-├── context/                                   # [TODO Part 2E–2F] Dynamic @./context/*.md files imported by CLAUDE.md
-├── maths/                                     # Unmodified upstream TheAlgorithms/Python `maths` files (for Agent to fix!)
-│   ├── binomial_distribution.py               # [Option A: Issue #15656] Overflow at 171 trials
-│   └── continued_fraction.py                  # [Option B: Issue #15655] Float division precision/OverflowError
-├── data_structures/
-│   └── linked_list/
-│       └── has_loop.py                        # [Option C: Issue #15576] O(n) visited set -> O(1) auxiliary space
-├── scripts/
-│   ├── context-switcher.sh                    # [TODO Part 2B] Dynamic context injection + idempotency guard
-│   ├── prevent-main-commit.sh                 # PreToolUse guard blocking upstream PRs & direct main commits
-│   ├── fork-and-submit-pr.sh                  # [TODO] Safe fork-only PR automation script
-│   ├── demo-reset.sh                          # Resets Phase 2 agent output back to clean Phase 1 state
-│   └── changelog-add.sh                       # Helper to add entries under ## [Unreleased] in CHANGELOG.md
-├── src/
-│   └── README.md                              # Empty target directory where the AI Agent generates its code in Phase 2
-└── tests/
-    └── test_lab6_progress.py                  # Phase 1 pytest suite verifying your 12 Context Engineering TODOs
+# 4. Audit the fixed algorithm against CONTRIBUTING.md & run doctests
+make compliance
+
+# 5. Verify the local FastMCP server (resource + fork-safety validator)
+make mcp-check
+
+# 6. Dry-run the fork-only PR workflow (no remote push or PR created)
+make demo-dry-run
+```
+
+### Running a Live Agent Benchmark & Fork Cleanup
+
+To execute the Phase 2 coding agent (`agy`), record wall-clock speed, token usage, sub-agent invocation (`issue-researcher`, `contributing-reviewer`), and changelog notes in [`PERFORMANCE_REPORT.md`](./PERFORMANCE_REPORT.md) + `logs/harness_performance.db`, and automatically clean up `denizin42/Python` afterward:
+
+```bash
+make benchmark VERSION=v3 LABEL="Post-Cleanup Run" CHANGE="Describe harness/prompt change"
+```
+
+To manually close test PRs and prune feature branches on `denizin42/Python` at any time:
+
+```bash
+make cleanup-fork
 ```
 
 ---
 
-## 3. Your Phase 1 `TODO` Roadmap (What the Professor Is Teaching)
+## 2. Two-Phase Workflow: What **You** Do vs. What **Your Agent** Figures Out
 
-Run `pytest -v` to track your progress across all 12 checks:
+| Phase | Who Does It | What Happens |
+| :--- | :--- | :--- |
+| **Phase 1: Context Engineering Harness** | **Student (Completed)** | Configured `CLAUDE.md`, symlinked `.claude/context/*.md`, `UserPromptSubmit` + `PreToolUse` hooks, on-demand skills (`denizin42-contributing`, `fork-pr-workflow`), bounded sub-agents (`issue-researcher`, `contributing-reviewer`), and `mcp_server.py`. |
+| **Phase 2: Autonomous Agent Execution** | **Coding Agent (`agy`)** | Forks `TheAlgorithms/Python` → `denizin42/Python` first, diagnoses Issue `#15656` (`maths/binomial_distribution.py` overflow at `trials >= 171`), applies the log-space fix, generates `src/` workflow tooling, audits via `contributing-reviewer`, and opens a fork-only PR. |
 
-1. **Part 1 — Select Target Issue & Personal Fork (`CLAUDE.md`)**:
-   - Fill in `issue_number`, `target_file`, `fork_owner`, and `branch_name` in the `CLAUDE.md` table (`TestPart1IssueTargetInMarkdown`).
-2. **Part 2 — Hooks, Project Memory & Dynamic Context (*Components of a Coding Agent* & *Context Engineering*)**:
-   - **Part 2A (`.claude/settings.json`)**: Wire `UserPromptSubmit` to `scripts/context-switcher.sh`.
-   - **Part 2B (`scripts/context-switcher.sh`)**: Implement the idempotent check-then-append guard in `add_context()`.
-   - **Part 2C (`CLAUDE.md`)**: Add the `@./context/*.md` dynamic context imports at column 0.
-   - **Part 2D–2F (`CLAUDE.md`, `context/contributing-rules.md`, `context/fork-pr-workflow.md`)**: Read `CONTRIBUTING.md` and author the project memory and modular context files teaching the agent how to follow `CONTRIBUTING.md`, what to generate in `src/`, and how to handle the fork/PR workflow without touching upstream.
-3. **Part 3 — On-Demand Agent Skills (*Agent Skills* Lecture)**:
-   - **Part 3A (`.claude/skills/thealgorithms-contributing/SKILL.md`)**: Author the YAML frontmatter (`name`, `description` answering *what* and *when*, `allowed-tools`) and procedural checklist for `CONTRIBUTING.md`.
-   - **Part 3B (`.claude/skills/fork-pr-workflow/SKILL.md` & `scripts/fork-and-submit-pr.sh`)**: Author the YAML frontmatter and procedural workflow for inspecting branch diffs (`git diff main...HEAD`), formatting the PR body, and submitting a PR strictly to your personal fork.
-4. **Part 4 — Bounded Sub-Agents (*Introduction to Subagents* Lecture)**:
-   - **Part 4A (`.claude/agents/contributing-reviewer.md` & `.claude/agents/issue-researcher.md`)**: Author the YAML frontmatter (scoping read-only vs. execution tools and preloading skills) and system prompts (defining structured output templates and `Obstacles Encountered` sections).
-   - **Part 4B (`CLAUDE.md`)**: Wire orchestrator `Task()` delegation to `contributing-reviewer` and `issue-researcher`.
-5. **Part 5 — Model Context Protocol Server (`mcp_server.py`)**:
-   - **Part 5A**: Implement `@mcp.tool` `verify_contribution_target` (blocking upstream `TheAlgorithms` and `main`/`master` branch commits).
-   - **Part 5B**: Implement `@mcp.resource("thealgorithms://issue-brief")` `get_issue_brief_resource`.
-   - **Part 5C**: Implement `@mcp.prompt("audit_contribution")` `audit_contribution_prompt`.
+---
+
+## 3. Performance, Token & Sub-Agent Tracking (`PERFORMANCE_REPORT.md`)
+
+Every benchmark run executed via [`scripts/track_performance.py`](./scripts/track_performance.py) logs to SQLite (`logs/harness_performance.db`) and regenerates [`PERFORMANCE_REPORT.md`](./PERFORMANCE_REPORT.md):
+
+- **Wall-Clock Fix Duration & Delta vs. `v1` Baseline**
+- **Token Usage** (`input_tokens`, `output_tokens`, `total_tokens` via `agy --output-format json`)
+- **Sub-Agent Verification** (checks transcript/output for `issue-researcher` and `contributing-reviewer`)
+- **Change / Changelog Attribution** (links each run to its `--change` or `CHANGELOG.md` entry)
+
+---
+
+## 4. Repository Structure
+
+```text
+cs440-lab6-thealgorithms-contrib/
+├── Makefile                                   # One-command install, test, lint, compliance, benchmark, cleanup-fork
+├── README.md                                  # Professor/TA quickstart, architecture, and verification guide
+├── CLAUDE.md                                  # Single-source target config, context router, and Phase 2 deliverables
+├── AGENTS.md -> CLAUDE.md                     # Symlink for multi-harness compatibility
+├── CONTRIBUTING.md                            # Official unmodified TheAlgorithms/Python Contributing Guidelines
+├── CHANGELOG.md                               # Keep a Changelog history
+├── PERFORMANCE_REPORT.md                      # SQLite-backed agent speed, token usage, and sub-agent report
+├── mcp_server.py                              # FastMCP server (@mcp.tool, @mcp.resource, @mcp.prompt)
+├── .claude/
+│   ├── settings.json                          # UserPromptSubmit & PreToolUse safety hooks
+│   ├── context/                               # Symlinks to ../../context/*.md (zero duplication)
+│   ├── skills/
+│   │   ├── denizin42-contributing/            # SKILL.md + AST check_compliance.py
+│   │   └── fork-pr-workflow/                  # SKILL.md + build_pr_body.py
+│   └── agents/
+│       ├── contributing-reviewer.md           # Preloads denizin42-contributing skill
+│       └── issue-researcher.md                # Read-only issue root-cause researcher
+├── context/                                   # Modular context rules imported by CLAUDE.md
+├── maths/binomial_distribution.py             # Fixed Issue #15656 (math.comb + log-space fallback)
+├── src/                                       # Generated compliance & fork-PR validator package
+├── scripts/
+│   ├── track_performance.py                   # SQLite + Markdown telemetry & Mermaid trend generator
+│   ├── fork-and-submit-pr.sh                  # Fork-only PR submission script (blocks TheAlgorithms/*)
+│   ├── cleanup-fork.sh                        # Closes test PRs & prunes feature branches on denizin42/Python
+│   ├── context-switcher.sh                    # Dynamic context injection hook
+│   └── prevent-main-commit.sh                 # PreToolUse guard blocking main commits & upstream PRs
+└── tests/
+    ├── test_lab6_progress.py                  # Phase 1 & harness verification suite
+    └── test_src_workflow.py                   # Phase 2 src/ workflow unit tests
+```

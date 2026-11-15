@@ -15,6 +15,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Add `Makefile` (`install`, `test`, `lint`, `compliance`, `mcp-check`, `demo-dry-run`, `benchmark`, `cleanup-fork`), `scripts/cleanup-fork.sh`, Professor/TA `README.md` quickstart, and live `stream-json` token/sub-agent/changelog telemetry (`v3` recorded at `189.699s`, `53,210` tokens, `issue-researcher, contributing-reviewer`)
 - Record `v2` fork-first agent benchmark (`45.724s`, `-81.0%` vs `v1` baseline) in `PERFORMANCE_REPORT.md` and `logs/harness_performance.db`, with fork-only PR opened at `denizin42/Python#1`
 - Fix Issue #15656 in maths/binomial_distribution.py, add src/ compliance & fork-PR workflow package, complete fork-and-submit-pr.sh, and record v1 agent fix baseline in PERFORMANCE_REPORT.md
 
