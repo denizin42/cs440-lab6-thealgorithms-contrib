@@ -710,3 +710,40 @@ class TestPart9MakefileCleanupAndTelemetry:
         assert "make benchmark" in readme
         assert "make cleanup-fork" in readme
         assert "PERFORMANCE_REPORT.md" in readme
+
+    def test_part_9e_fork_overhead_normalization(self, tmp_path: Path) -> None:
+        """Verify --fork-overhead-sec is stored and added to normalized duration."""
+        tracker = REPO_ROOT / "scripts" / "track_performance.py"
+        db_file = tmp_path / "fork_perf.db"
+        report_file = tmp_path / "FORK_REPORT.md"
+        proc = subprocess.run(
+            [
+                sys.executable,
+                str(tracker),
+                "--version",
+                "v_warm",
+                "--baseline",
+                "--label",
+                "Warm Fork Run",
+                "--agent-duration-sec",
+                "10.0",
+                "--fork-overhead-sec",
+                "4.5",
+                "--db-file",
+                str(db_file),
+                "--report-file",
+                str(report_file),
+            ],
+            cwd=str(REPO_ROOT),
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        assert proc.returncode == 0, f"track_performance.py failed: {proc.stderr or proc.stdout}"
+        conn = sqlite3.connect(db_file)
+        conn.row_factory = sqlite3.Row
+        row = dict(conn.execute("SELECT * FROM agent_runs WHERE version_tag='v_warm'").fetchone())
+        conn.close()
+        assert row["fork_overhead_sec"] == 4.5
+        report_text = report_file.read_text(encoding="utf-8")
+        assert "14.500" in report_text
