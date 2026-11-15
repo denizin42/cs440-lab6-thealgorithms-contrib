@@ -1,21 +1,31 @@
 # `TheAlgorithms/Python` Contributing Rules Context (`@./context/contributing-rules.md`)
 
-<!--
-==============================================================================
-TODO (Part 2E - Author the Modular `CONTRIBUTING.md` Context Document):
-Read `CONTRIBUTING.md` and `.github/pull_request_template.md`, then replace
-`TODO_PART_2E_WRITE_CONTRIBUTING_CONTEXT` below with the domain context that
-`scripts/context-switcher.sh` injects when the user's branch or prompt touches
-algorithm implementation, style, or testing.
+## 1. Algorithm Scope & Repository Structure
 
-HINTS:
-- What distinguishes an acceptable algorithm in `TheAlgorithms/Python` from a
-  script or library how-to example?
-- What checks do the automated GitHub Actions in `TheAlgorithms/Python` run on
-  every submitted file?
-- What files in the repository are auto-generated and must never be edited by
-  a contributor?
-Note: Keep `.claude/context/contributing-rules.md` in sync with `context/contributing-rules.md`.
-==============================================================================
--->
-TODO_PART_2E_WRITE_CONTRIBUTING_CONTEXT
+- **Unique Algorithmic Value**: Submissions must perform internal calculations or data manipulations rather than acting as thin how-to wrappers around existing Python packages.
+- **Fit Existing Directories**: Place files inside existing category directories (`maths/`, `data_structures/`, etc.); avoid creating new directories.
+- **Protected Auto-Generated Files**: Never modify `README.md` or `DIRECTORY.md` (they are updated automatically by repo automation).
+- **One File Per PR**: Each Pull Request must modify only a single algorithm file (`maths/binomial_distribution.py`).
+
+## 2. Python Naming & Coding Style (`PEP 8` & `PEP 484`)
+
+- **Target Runtime**: Write modern Python 3 (`3.15t+` compatible) using `f-strings` where they improve readability.
+- **Naming Conventions**:
+  - Filenames, function names, and variable names: descriptive `snake_case` (`lower_case_with_underscores`), no spaces or hyphens.
+  - Class names: `CamelCase`.
+  - Module constants: `UPPER_CASE`.
+  - Avoid cryptic single-letter variable names and expand acronyms (e.g., `greatest_common_divisor` instead of `gcd`).
+- **Explicit Type Hints (`PEP 484`)**: Every function parameter and return value must have explicit Python type annotations.
+- **Pure Calculation Functions & Exceptions**:
+  - Return calculation results directly instead of `print()` or plotting.
+  - Never call interactive `input()`.
+  - Raise explicit Python exceptions (`ValueError`, `TypeError`) on invalid or out-of-domain inputs.
+
+## 3. Docstrings, Doctests & Local Verification Commands
+
+- **Docstrings**: Every function requires a clear docstring explaining the algorithm and linking reference URLs (such as Wikipedia) when applicable. Comments should explain *why*, not repeat *what* the code does.
+- **Doctests (`doctest`)**: Every function docstring must contain `>>>` doctest examples testing both valid inputs and erroneous inputs (`Traceback (most recent call last): ...`).
+- **Required Pre-Submission Checks**:
+  - Run doctests: `python3 -m doctest -v maths/binomial_distribution.py`
+  - Run formatter & linter: `ruff format` and `ruff check` (or `pre-commit run --all-files --show-diff-on-failure`)
+  - Run static type & lint checks: `mypy maths/binomial_distribution.py` and `python3 -m pylint maths/binomial_distribution.py`

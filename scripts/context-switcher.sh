@@ -41,12 +41,12 @@ touch "$CLAUDE_MD"
 add_context() {
     local context_ref="$1"
     # TODO (Part 2B): Implement idempotent check-then-append into "$CLAUDE_MD"
-    return 1
+    grep -qxF "$context_ref" "$CLAUDE_MD" 2>/dev/null || echo "$context_ref" >> "$CLAUDE_MD"
 }
 
 # --- 1. Branch-based context selection ---
 case "$BRANCH" in
-    fix/issue-*|feature/algorithm*|bugfix/*)
+    fix/issue-*|feature/fix*|feature/algorithm*|bugfix/*)
         add_context "@./context/issue-brief.md"
         add_context "@./context/contributing-rules.md"
         cat "$PROJECT_DIR/.claude/context/issue-brief.md"

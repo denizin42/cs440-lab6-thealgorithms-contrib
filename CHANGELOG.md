@@ -9,3 +9,4 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 - Initial Lab 6 scaffolding for contributing to `TheAlgorithms/Python` open issues (`#15656`, `#15655`, `#15576`) using Claude Code features (Hooks, MCP, Skills, and Sub-agents) with strict upstream isolation guards.
+- Added fixes and tests for Lab Tests 1-3

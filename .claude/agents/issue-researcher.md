@@ -13,8 +13,8 @@
 #   implementations, edge cases, complexity) and define a structured output
 #   format (Subagents Slides 13–14).
 # ==============================================================================
-name: TODO_PART_4A_SET_RESEARCHER_NAME
-description: TODO_PART_4A_SET_RESEARCHER_DESCRIPTION
+name: issue-researcher
+description: Researches CVE issues for 
 tools: []
 model: sonnet
 color: blue

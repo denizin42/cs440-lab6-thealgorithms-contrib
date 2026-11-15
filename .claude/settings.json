@@ -5,7 +5,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "TODO_PART_2A: Configure command to invoke the context-switcher script in scripts/",
+            "command": "bash \"$CLAUDE_PROJECT_DIR/scripts/context-switcher.sh\"",
             "timeout": 10
           }
         ]

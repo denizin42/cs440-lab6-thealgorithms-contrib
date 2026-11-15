@@ -146,10 +146,13 @@ def verify_contribution_target(
     ===========================================================================
     """
     _ = (issue_number, target_file, fork_owner, branch_name)
-    # TODO (Part 5A): Implement the validation checks above
-    raise NotImplementedError(
-        "TODO (Part 5A): Implement `verify_contribution_target` in `mcp_server.py`."
-    )
+    if issue_number < 0:
+        raise ValueError("Issue number cannot be negative")
+    if fork_owner == "" or "thealgorithms" in fork_owner:
+        raise ValueError("Owner cannot be empty or thealgorithms")
+    if branch_name == "" or "main|master" in branch_name:
+        raise ValueError("Cannot commit directly to master or main")
+    return "Positive Validation"
 
 
 # ==============================================================================
