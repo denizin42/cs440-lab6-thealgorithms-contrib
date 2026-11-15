@@ -156,7 +156,11 @@ def measure_harness_features() -> Dict[str, Any]:
             "pytest",
             "tests/test_lab6_progress.py",
             "-k",
-            "not TestPart7PerformanceTracker and not TestPart9MakefileCleanupAndTelemetry",
+            (
+                "not TestPart7PerformanceTracker and "
+                "not TestPart9MakefileCleanupAndTelemetry and "
+                "not TestPart10AgentAgnosticSupport"
+            ),
             "-v",
             "--tb=no",
         ],
@@ -387,6 +391,48 @@ def _print_subagent_step(raw_json: str, short_id: str, elapsed: float) -> None:
         )
 
 
+def _handle_claude_event(
+    obj: Dict[str, Any],
+    elapsed: float,
+    telemetry: Dict[str, Any],
+    chunks: List[str],
+) -> None:
+    """Handle Claude Code `--output-format stream-json` NDJSON events."""
+    ctype = obj.get("type")
+    if ctype == "system" and obj.get("subtype") == "init":
+        sid = str(obj.get("session_id", ""))
+        telemetry["conversation_id"] = sid
+        print(f"      [+{elapsed:5.1f}s] 🔌 Claude session started ({sid[:8]})", flush=True)
+    elif ctype == "assistant":
+        for block in (obj.get("message") or {}).get("content") or []:
+            if not isinstance(block, dict):
+                continue
+            if block.get("type") == "tool_use":
+                name = str(block.get("name", "tool"))
+                inp = block.get("input") or {}
+                chunks.append(json.dumps(inp))
+                icon = _TOOL_ICONS.get(name, "🤖" if name == "Task" else "⚙️")
+                detail = _summarize_tool_params(inp) or str(inp.get("subagent_type", ""))
+                suffix = f" -> {detail}" if detail else ""
+                print(f"      [+{elapsed:5.1f}s] {icon} {name}{suffix}", flush=True)
+            elif block.get("type") == "text" and block.get("text"):
+                chunks.append(str(block["text"]))
+    elif ctype == "result":
+        usage = obj.get("usage") or {}
+        in_tok = int(usage.get("input_tokens", 0))
+        out_tok = int(usage.get("output_tokens", 0))
+        telemetry["input_tokens"] = in_tok
+        telemetry["output_tokens"] = out_tok
+        telemetry["total_tokens"] = int(usage.get("total_tokens", in_tok + out_tok))
+        if obj.get("result"):
+            chunks.append(str(obj["result"]))
+        print(
+            f"      [+{elapsed:5.1f}s] 🏁 Result: {obj.get('subtype', 'DONE')} "
+            f"(total tokens={telemetry['total_tokens']:,})",
+            flush=True,
+        )
+
+
 def _process_stream_line(
     raw_line: str,
     start_ns: int,
@@ -406,6 +452,9 @@ def _process_stream_line(
         return
 
     if not isinstance(obj, dict):
+        return
+    if "type" in obj and "event" not in obj:
+        _handle_claude_event(obj, elapsed, telemetry, chunks)
         return
     ev = obj.get("event")
     if ev == "init":

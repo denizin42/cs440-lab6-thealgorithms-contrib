@@ -755,3 +755,82 @@ class TestPart9MakefileCleanupAndTelemetry:
         )
         for marker in ("🚀", "🧪", "📊", "📝", "🤖", "📖", "💻"):
             assert marker in tracker_text, f"Missing '{marker}' emoji in track_performance.py"
+
+
+class TestPart10AgentAgnosticSupport:
+    """Verifies Claude Code, Antigravity (agy), and generic CLI agent compatibility."""
+
+    def test_part_10a_tracker_parses_claude_code_stream_json(self, tmp_path: Path) -> None:
+        """Verify track_performance.py parses Claude Code stream-json events and tokens."""
+        tracker = REPO_ROOT / "scripts" / "track_performance.py"
+        db_file = tmp_path / "claude.db"
+        report_file = tmp_path / "CLAUDE_REPORT.md"
+        events = [
+            json.dumps(
+                {
+                    "type": "assistant",
+                    "message": {
+                        "content": [
+                            {
+                                "type": "tool_use",
+                                "name": "Task",
+                                "input": {"subagent_type": "issue-researcher"},
+                            },
+                            {
+                                "type": "tool_use",
+                                "name": "Task",
+                                "input": {"subagent_type": "contributing-reviewer"},
+                            },
+                        ]
+                    },
+                }
+            ),
+            json.dumps(
+                {
+                    "type": "result",
+                    "subtype": "success",
+                    "result": "Done",
+                    "usage": {"input_tokens": 900, "output_tokens": 150},
+                }
+            ),
+        ]
+        cmd = "python3 -c 'import sys; print(\"\\n\".join(sys.argv[1:]))' " + " ".join(
+            f"'{e}'" for e in events
+        )
+        proc = subprocess.run(
+            [
+                sys.executable,
+                str(tracker),
+                "--version",
+                "v_claude",
+                "--baseline",
+                "--label",
+                "Claude Code Run",
+                "--agent-cmd",
+                cmd,
+                "--db-file",
+                str(db_file),
+                "--report-file",
+                str(report_file),
+            ],
+            cwd=str(REPO_ROOT),
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        assert proc.returncode == 0, f"track_performance.py failed: {proc.stderr or proc.stdout}"
+        conn = sqlite3.connect(db_file)
+        conn.row_factory = sqlite3.Row
+        row = dict(conn.execute("SELECT * FROM agent_runs WHERE version_tag='v_claude'").fetchone())
+        conn.close()
+        assert row["total_tokens"] == 1050
+        assert "issue-researcher" in row["subagents_used"]
+        assert "contributing-reviewer" in row["subagents_used"]
+
+    def test_part_10b_makefile_and_readme_agent_agnostic(self) -> None:
+        """Verify Makefile and README support AGENT=claude, AGENT=agy, or custom AGENT_CMD."""
+        makefile = (REPO_ROOT / "Makefile").read_text(encoding="utf-8")
+        readme = (REPO_ROOT / "README.md").read_text(encoding="utf-8")
+        assert "AGENT ?=" in makefile
+        assert "claude" in makefile and "agy" in makefile
+        assert "AGENT=claude" in readme or "claude" in readme.lower()
