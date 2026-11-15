@@ -96,7 +96,8 @@ class TestPart14FastpathBundleAndSinglePassReview:
         assert ctx.exists(), "Missing context/phase2-fastpath.md"
         assert link.is_symlink(), ".claude/context/phase2-fastpath.md must be a symlink"
         text = ctx.read_text(encoding="utf-8")
-        assert "math.comb" in text and "lgamma" in text
+        assert "get_phase2_fastpath_bundle" in text and "fast_audit.py" in text
+        assert "lgamma" not in text and "math.comb" not in text
         claude_md = (REPO_ROOT / "CLAUDE.md").read_text(encoding="utf-8")
         assert "@./context/phase2-fastpath.md" in claude_md
 
@@ -133,3 +134,28 @@ class TestPart15AutoFormatAndParallelEdit:  # pylint: disable=too-few-public-met
         assert "--fix" in fast_audit and "format" in fast_audit
         makefile = (REPO_ROOT / "Makefile").read_text(encoding="utf-8")
         assert "tests/test_src_workflow.py" in makefile
+
+
+class TestPart16LeanOrchestratorAndAuditErrors:  # pylint: disable=too-few-public-methods
+    """Verifies fast_audit returns error details on failure and Makefile avoids extra reads."""
+
+    def test_part_16a_fast_audit_includes_error_details_on_failure(self, tmp_path: Path) -> None:
+        """Verify fast_audit.py includes concise error details when a check fails."""
+        bad_file = tmp_path / "bad_algo.py"
+        bad_file.write_text("def f(x):\n    return x + 1\n", encoding="utf-8")
+        fast_audit = REPO_ROOT.joinpath(
+            ".claude", "skills", "denizin42-contributing", "scripts", "fast_audit.py"
+        )
+        proc = subprocess.run(
+            [sys.executable, str(fast_audit), str(bad_file)],
+            cwd=REPO_ROOT,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        assert proc.returncode == 1
+        data = json.loads(proc.stdout)
+        assert data.get("errors"), "Expected non-empty 'errors' dict on failing fast_audit"
+        makefile = (REPO_ROOT / "Makefile").read_text(encoding="utf-8")
+        assert "get_phase2_fastpath_bundle" in makefile
+        assert "lgamma" not in makefile and "math.comb" not in makefile
