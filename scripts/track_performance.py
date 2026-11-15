@@ -447,35 +447,49 @@ def main() -> int:
     parser.add_argument("--json", action="store_true", help="Print JSON snapshot to stdout")
     args = parser.parse_args()
 
+    def _log(msg: str) -> None:
+        if not args.json:
+            print(msg, flush=True)
+
+    _log(f"[1/4] Starting '{args.label}' (version={args.version or 'auto'})...")
     if args.agent_cmd:
+        _log(f"      Executing agent command: {args.agent_cmd}")
         duration_sec, exit_code = run_timed_agent_command(args.agent_cmd)
+        _log(f"      Agent finished in {duration_sec:.3f}s (exit_code={exit_code}).")
     elif args.agent_duration_sec is not None:
         duration_sec, exit_code = float(args.agent_duration_sec), 0
+        _log(f"      Using recorded agent duration: {duration_sec:.3f}s.")
     else:
         t0 = time.perf_counter_ns()
         measure_harness_features()
         duration_sec = round((time.perf_counter_ns() - t0) / 1_000_000_000.0, 4)
         exit_code = 0
 
+    _log("[2/4] Measuring harness checks & context efficiency...")
     db_path = Path(args.db_file)
     report_path = Path(args.report_file)
     with init_db(db_path) as conn:
+        _log("[3/4] Benchmarking target algorithm & saving run to SQLite...")
         snapshot = _build_snapshot(args, conn, duration_sec, exit_code)
         record_run(conn, snapshot)
         runs = fetch_runs(conn)
 
-    report_path.write_text(render_markdown_report(runs, db_path), encoding="utf-8")
+    _log(f"[4/4] Rendering {report_path.name}...")
+    report_md = render_markdown_report(runs, db_path)
+    report_path.write_text(report_md, encoding="utf-8")
 
     if args.json:
         print(json.dumps(snapshot, indent=2))
     else:
         print(
-            f"[SQLite Perf Recorded] {snapshot['version_tag']} ({snapshot['label']}): "
+            f"\n[SQLite Perf Recorded] {snapshot['version_tag']} ({snapshot['label']}): "
             f"Agent={snapshot['agent_duration_sec']:.3f}s "
             f"(Delta={snapshot['delta_vs_baseline_sec']:+.3f}s), "
             f"Harness={snapshot['harness_score_pct']}% in {snapshot['harness_eval_ms']}ms, "
-            f"DB={db_path}"
+            f"DB={db_path}\n",
+            flush=True,
         )
+        print(report_md, flush=True)
     return 0
 
 

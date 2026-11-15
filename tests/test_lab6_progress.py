@@ -507,6 +507,31 @@ class TestPart7PerformanceTracker:
         assert "Agent Fix Duration" in report_text
         assert "v1" in report_text and "v2" in report_text
 
+        # 3. Verify non-JSON run prints live progress & summary to console
+        v2_proc = subprocess.run(
+            [
+                sys.executable,
+                str(script_path),
+                "--version",
+                "v3",
+                "--label",
+                "v3 Console Output Check",
+                "--agent-duration-sec",
+                "0.01",
+                "--db-file",
+                str(db_file),
+                "--report-file",
+                str(report_file),
+            ],
+            cwd=str(REPO_ROOT),
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        assert v2_proc.returncode == 0
+        assert "[1/4]" in v2_proc.stdout
+        assert "Baseline" in v2_proc.stdout
+
         for idx, line in enumerate(report_text.splitlines()[:-1]):
             if line.startswith("#"):
                 assert report_text.splitlines()[idx + 1] == "", (

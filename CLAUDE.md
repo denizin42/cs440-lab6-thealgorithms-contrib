@@ -28,12 +28,10 @@ To avoid **Context Bloat** (Context Engineering Lecture Slide 15), `CLAUDE.md` s
 
 ### Phase 2 Agent Deliverables (`src/` & Target Issue Fix)
 
-1. Fix Issue `#15656` in `maths/binomial_distribution.py` so large `trials` (e.g., `n >= 171`) do not overflow `float(factorial(trials))`, and add `doctest` regression tests.
-2. Generate the Python workflow package in `src/` providing:
-   - An AST-based `CONTRIBUTING.md` compliance checker (verifying `snake_case`, PEP 484 type hints, docstrings, `>>>` doctests, and no `input()`).
-   - A fork/PR safety validator that blocks `TheAlgorithms/*` and renders the `.github/pull_request_template.md` checklist.
-3. Verify via MCP (`verify_contribution_target`) and sub-agents (`issue-researcher`, `contributing-reviewer`), and document results in `CONTRIBUTION_REPORT.md`.
-4. Fork `TheAlgorithms/Python` to `denizin42/Python` and open the fork-only PR inside `denizin42/Python` by running `DRY_RUN=false bash scripts/fork-and-submit-pr.sh` (never target upstream `TheAlgorithms/*`).
+1. **Fork First**: Fork `TheAlgorithms/Python` to `denizin42/Python` (`gh repo fork TheAlgorithms/Python --clone=false`) so all work targets your personal fork (never upstream `TheAlgorithms/*`).
+2. **Diagnose & Fix Issue `#15656`**: Research `maths/binomial_distribution.py` via `issue-researcher`, fix the `float(factorial(trials))` overflow for large `trials` (`n >= 171`), and add `doctest` regression tests.
+3. **Generate & Audit `src/`**: Build/verify the Python workflow package in `src/` (AST-based `CONTRIBUTING.md` compliance checker, fork-target validator, and PR template builder), audit via MCP (`verify_contribution_target`) and `contributing-reviewer`, and publish `CONTRIBUTION_REPORT.md`.
+4. **Open Fork-Only PR**: Run `DRY_RUN=false bash scripts/fork-and-submit-pr.sh` to push the fixed algorithm to `denizin42/Python` and open the Pull Request inside your personal fork.
 
 ---
 
