@@ -159,3 +159,17 @@ class TestPart16LeanOrchestratorAndAuditErrors:  # pylint: disable=too-few-publi
         makefile = (REPO_ROOT / "Makefile").read_text(encoding="utf-8")
         assert "get_phase2_fastpath_bundle" in makefile
         assert "lgamma" not in makefile and "math.comb" not in makefile
+
+    def test_part_16b_fastpath_bundle_includes_source_and_rules_without_unused_tools(
+        self,
+    ) -> None:
+        """Verify get_phase2_fastpath_bundle includes source+rules and unused tools are gone."""
+        import mcp_server  # pylint: disable=import-outside-toplevel
+
+        bundle = mcp_server.get_phase2_fastpath_bundle()
+        assert "def binomial_distribution" in bundle.get("target_file_source", "")
+        rules = bundle.get("contributing_rules", "")
+        assert "doctest" in rules.lower()
+        assert "lgamma" not in rules and "math.comb" not in rules
+        for removed in ("read_context_doc", "list_context_docs"):
+            assert not hasattr(mcp_server, removed), f"Unused MCP endpoint still present: {removed}"
