@@ -18,6 +18,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Allow `DRY_RUN=true` in `scripts/fork-and-submit-pr.sh` when CI or `make test` runs on `main` (while still blocking live pushes from `main`/`master`)
+
 - Fix unescaped `#15656` Make comment in `Makefile` `PROMPT` that truncated steps `(3)` and `(4)`, add explicit no-early-exit rule in `context/phase2-fastpath.md` and `Makefile`, and record `v12` (`93.318s`, `59,295` tokens, `RESOLVED`) in `PERFORMANCE_REPORT.md`
 
 - Display sub-agent role names (`[issue-researcher]`, `[contributing-reviewer]`) instead of `[subagent:<id>]` in live console output and filter out pre-existing transcripts in `iter_recent_subagent_transcripts()`
