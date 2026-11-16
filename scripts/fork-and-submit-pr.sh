@@ -32,8 +32,13 @@ fi
 echo "[2/5] Checking feature branch..."
 CURRENT_BRANCH="$(git -C "$REPO_ROOT" rev-parse --abbrev-ref HEAD 2>/dev/null || echo "")"
 if [[ "$CURRENT_BRANCH" == "main" || "$CURRENT_BRANCH" == "master" || -z "$CURRENT_BRANCH" ]]; then
-    echo "FATAL: Must run from a feature branch (current: '${CURRENT_BRANCH}')." >&2
-    exit 1
+    if [[ "$DRY_RUN" == "true" || "$DRY_RUN" == "1" ]]; then
+        CURRENT_BRANCH="feature/fix_binomial_distribution"
+        echo "      [DRY_RUN] On protected branch; simulating feature branch '${CURRENT_BRANCH}'."
+    else
+        echo "FATAL: Must run from a feature branch (current: '${CURRENT_BRANCH}')." >&2
+        exit 1
+    fi
 fi
 
 # 3. Verify target algorithm doctests pass before pushing
