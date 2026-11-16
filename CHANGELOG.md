@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Record `v14` benchmark (`100.898s` normalized, `55,893` main tokens — lowest token usage of any resolved run, `RESOLVED` with 5 doctests and `lint_ok: true`) in `PERFORMANCE_REPORT.md`
+
 - Return concise `errors` dict in `fast_audit.py` on failing `compliance`/`doctests`/`ruff`/`mypy`/`pylint` checks, remove all solution hints (`math.comb`/`lgamma`) from `Makefile` `PROMPT` and `context/phase2-fastpath.md` (enforced by `TestPart16LeanOrchestratorAndAuditErrors`), and record honest `v11` solve-from-scratch run (`83.822s`, `-65.9%` vs `v1`, `57,647` main tokens, `contributing-reviewer` `6.00s`, `issue-researcher` `9.00s`) in `PERFORMANCE_REPORT.md`
 - Auto-run `ruff check --fix` and `ruff format` in `fast_audit.py`, parallelize `issue-researcher` with `edit_file` in `context/phase2-fastpath.md`, and use fast `tests/test_src_workflow.py` (`0.79s`) in `Makefile` `PROMPT`; recorded `v10` (`110.805s`, sub-agents `3.00s` / `9,613` tok + `5.00s` / `14,469` tok) in `PERFORMANCE_REPORT.md`
 - Add `context/phase2-fastpath.md` (symlinked into `.claude/context/` and imported in `CLAUDE.md`) and MCP `get_phase2_fastpath_bundle` tool to eliminate exploratory `ls`/`grep` turns and enforce single-pass post-edit `contributing-reviewer` auditing
