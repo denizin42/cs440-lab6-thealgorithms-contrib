@@ -5,8 +5,9 @@ Reference:
   - Components of a Coding Agent Lecture (Component 03: Structured, Validated Tool Use)
 
 Exposes the three MCP building blocks to guide the AI agent on `TheAlgorithms/Python`:
-  1. Tools     (`@mcp.tool`)     — `read_context_doc`, `verify_contribution_target`
-  2. Resources (`@mcp.resource`) — `thealgorithms://context`, `thealgorithms://issue-brief`
+  1. Tools     (`@mcp.tool`)     — `verify_contribution_target`, `get_issue_root_cause_context`,
+                                   `run_fast_compliance_audit`, `get_phase2_fastpath_bundle`
+  2. Resources (`@mcp.resource`) — `thealgorithms://issue-brief`
   3. Prompts   (`@mcp.prompt`)   — `/audit_contribution`
 """
 # pylint: disable=fixme
@@ -102,21 +103,6 @@ CONTEXT_DOCS: Dict[str, Path] = {
 # ==============================================================================
 # 1. MCP TOOLS (`@mcp.tool`)
 # ==============================================================================
-
-
-@mcp.tool(
-    name="read_context_doc",
-    description="Read a CS 440 TheAlgorithms context document and return its contents.",
-)
-def read_context_doc(
-    doc_id: str = Field(
-        description="Context doc ID (contributing-rules.md, issue-brief.md, fork-pr-workflow.md)"
-    ),
-) -> str:
-    """Complete working reference example of `@mcp.tool`."""
-    if doc_id not in CONTEXT_DOCS:
-        raise ValueError(f"Doc '{doc_id}' not found. Valid IDs: {list(CONTEXT_DOCS)}")
-    return CONTEXT_DOCS[doc_id].read_text(encoding="utf-8")
 
 
 @mcp.tool(
@@ -233,10 +219,13 @@ def run_fast_compliance_audit(
 
 @mcp.tool(
     name="get_phase2_fastpath_bundle",
-    description="Return target validation, Issue #15656 AST/overflow context, and src/ status.",
+    description=(
+        "Return target validation, Issue #15656 context, target source, "
+        "contributing rules, and src/ status."
+    ),
 )
 def get_phase2_fastpath_bundle() -> Dict[str, Any]:
-    """Bundle pre-flight target check, Issue #15656 context, and src/ readiness in one call."""
+    """Bundle pre-flight check, target source, contributing rules, and src/ status."""
     msg = verify_contribution_target(
         issue_number=15656,
         target_file="maths/binomial_distribution.py",
@@ -253,6 +242,10 @@ def get_phase2_fastpath_bundle() -> Dict[str, Any]:
     return {
         "target_validation": {"allowed": True, "message": msg},
         "issue_context": issue_ctx,
+        "target_file_source": (PROJECT_ROOT / "maths" / "binomial_distribution.py").read_text(
+            encoding="utf-8"
+        ),
+        "contributing_rules": CONTEXT_DOCS["contributing-rules.md"].read_text(encoding="utf-8"),
         "src_ready": src_ready,
     }
 
@@ -260,12 +253,6 @@ def get_phase2_fastpath_bundle() -> Dict[str, Any]:
 # ==============================================================================
 # 2. MCP RESOURCES (`@mcp.resource`)
 # ==============================================================================
-
-
-@mcp.resource("thealgorithms://context", mime_type="application/json")
-def list_context_docs() -> list[str]:
-    """Direct resource returning the list of available context document IDs."""
-    return list(CONTEXT_DOCS.keys())
 
 
 @mcp.resource("thealgorithms://issue-brief", mime_type="application/json")

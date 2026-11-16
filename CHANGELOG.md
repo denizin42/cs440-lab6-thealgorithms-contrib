@@ -26,6 +26,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Remove unused `read_context_doc` and `list_context_docs` endpoints from `mcp_server.py`, enrich `get_phase2_fastpath_bundle()` with `target_file_source` and `contributing_rules`, update `context/phase2-fastpath.md` to skip redundant exploration reads, and record `v13` (`150.547s` due to an accidental `120s` `schedule` sleep, `~26s` active work, `65,535` tokens, `RESOLVED` with 7 doctests) in `PERFORMANCE_REPORT.md`
+
 - Split `scripts/track_performance.py` into `scripts/harness_metrics.py`, `scripts/stream_telemetry.py`, and `scripts/report_renderer.py`, eliminating all CodeClimate `FILE_LENGTH` and Type-2 duplication violations (`0` clones, `0` violations across `scripts/` and `src/`)
 
 - Prune intermediate benchmark runs `v2`–`v10` from `logs/harness_performance.db` and `PERFORMANCE_REPORT.md`, keeping `v1` baseline (`245.475s`) and `v11` latest (`83.822s`, `-65.9%`)
